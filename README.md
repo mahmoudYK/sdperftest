@@ -1,4 +1,4 @@
-# Collection of scripts for systemd load test and perfromance analysis.
+# Collection of scripts for systemd load test and performance analysis.
 
 ## generate_services.py:
 
@@ -14,17 +14,17 @@ amount of possible edges (dependencies) between services.
 pystemd: install instructions can be found at https://github.com/facebookincubator/pystemd 
 
 ## Options:
--  -h, --help
-                        show this help message and exit
--  -n NUM_OF_SERVICES, --num_of_services NUM_OF_SERVICES
+-  -h, --help  
+                        show this help message and exit.
+-  -n NUM_OF_SERVICES, --num_of_services NUM_OF_SERVICES  
                         number of services to generate, if not used, 500 is default.
--  -t TYPE, --type TYPE
+-  -t TYPE, --type TYPE  
                         type of generated test services as comma separated list [parallel,single_path,dag].
--  -g, --generate
+-  -g, --generate  
                         generate and enable all the test services (default behaviour if -r is not used).
--  -r, --remove
+-  -r, --remove  
                         disbale and remove all the test services.
--  -p EDGE_PROBABILITY, --edge_probability EDGE_PROBABILITY
+-  -p EDGE_PROBABILITY, --edge_probability EDGE_PROBABILITY  
                         edge probability for DAG services generator (default: 0.1).
 -  -a, --analyze
                         analyze systemd boot time.
@@ -48,7 +48,7 @@ Disable and remove all services of type parallel and single_path:
 ```sh
 $ sudo python3 generate_services.py  -t parallel -t single_path -r
 ```
-Generate 1000 services of type dag, 1000 of type parallel and 1000 of type single_path:
+Generate 1000 services of type DAG, 1000 of type parallel and 1000 of type single_path:
 ```sh
 $ sudo python3 generate_services.py  -t dag -t parallel -t single_path -n 1000
 ```
@@ -57,5 +57,5 @@ Analyze boot time of systemd:
 $ sudo python3 generate_services.py -a
 ```
 
-## License
+## License:
 LGPL-2.1-or-later
