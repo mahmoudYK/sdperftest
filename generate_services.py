@@ -471,7 +471,7 @@ def main() -> None:
         fail("please run the script as root")
 
     if len(sys.argv) <= 1:
-        fail("No options used, please use [-h|--help] to see the availbale options.")
+        fail("No options used, please use [-h|--help] to list the availbale options.")
 
     args = parse_args()
 

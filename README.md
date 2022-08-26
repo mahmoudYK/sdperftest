@@ -6,12 +6,12 @@ Generator of systemd test services with different kinds of dependencies, current
 - [parallel]: basic services without any dependencies among each other.
 - [single_path]: each service depends only on the previous service, 
 except test_single_path0.service which is considered the root of the single path graph.
-so, it doesn't depend on any services 
+so, it doesn't depend on any services. 
 - [dag]: directed acyclic graph of random service dependeencies with edge probability option to control the
 amount of possible edges (dependencies) between services.
 
 ## Packages needs to be installed:
-pystemd: install instructions can be found at https://github.com/facebookincubator/pystemd 
+pystemd: installing instructions can be found at https://github.com/facebookincubator/pystemd 
 
 ## Options:
 -  -h, --help  
