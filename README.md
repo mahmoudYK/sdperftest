@@ -26,7 +26,7 @@ pystemd: installing instructions can be found at https://github.com/facebookincu
                         disbale and remove all the test services.
 -  -p EDGE_PROBABILITY, --edge_probability EDGE_PROBABILITY  
                         edge probability for DAG services generator (default: 0.1).
--  -a, --analyze
+-  -a, --analyze  
                         analyze systemd boot time.
 
 ## Examples:
