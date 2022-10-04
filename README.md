@@ -19,7 +19,7 @@ pystemd: installing instructions can be found at https://github.com/facebookincu
 -  -n NUM_OF_SERVICES, --num_of_services NUM_OF_SERVICES  
                         number of services to generate, if not used, 500 is default.
 -  -t TYPE, --type TYPE  
-                        type of generated test services as comma separated list [parallel,single_path,dag].
+                        type of generated test services [parallel,single_path,dag].
 -  -g, --generate  
                         generate and enable all the test services (default behaviour if -r is not used).
 -  -r, --remove  

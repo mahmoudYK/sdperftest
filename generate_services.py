@@ -434,7 +434,7 @@ def parse_args() -> argparse.Namespace:
         "-t",
         "--type",
         action="append",
-        help="type of generated test services as comma separated list [parallel,single_path,dag]",
+        help="type of generated test services [parallel,single_path,dag]",
     )
     parser.add_argument(
         "-g",
