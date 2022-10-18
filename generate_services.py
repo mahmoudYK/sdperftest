@@ -13,6 +13,7 @@ import dataclasses
 import types
 import functools
 import abc
+import glob
 
 # https://github.com/facebookincubator/pystemd
 import pystemd.systemd1
@@ -65,7 +66,7 @@ def build_service_template(sections: dict) -> str:
 
 def fail(fail_message: str) -> None:
     """print error message and exit with status 1"""
-    print("Error: " + fail_message, file=sys.stderr)
+    print(f"Error: {fail_message}", file=sys.stderr)
     sys.exit(1)
 
 
@@ -97,18 +98,14 @@ def disable_test_services(service_template_prefix: str) -> int:
     return disabled_services_counter
 
 
-def remove_test_services(service_template_prefix: str) -> None:
+def remove_test_services(path:str, service_template_prefix: str) -> None:
     """remove all test services which match a certain template prefix"""
     service_suffix = "*.service"
-    try:
-        subprocess.run(
-            f"rm {SYSTEMD_SYSTEM_PATH + service_template_prefix + service_suffix}",
-            shell=True,
-            check=True
-        )
-    except subprocess.CalledProcessError:
-        fail(f"rm {service_template_prefix}*.service failed")
-
+    files_to_remove = glob.glob(path+service_template_prefix+service_suffix)
+    if files_to_remove:
+        for file_name in files_to_remove:
+            os.remove(file_name)
+        
 
 def write_service_file(path: str, service_text: str) -> None:
     """write service text to a .service file at path"""
@@ -501,7 +498,7 @@ def main() -> None:
                     services_count = disable_test_services(
                         obj.get_test_service_prefix()
                     )
-                    remove_test_services(obj.get_test_service_prefix())
+                    remove_test_services(SYSTEMD_SYSTEM_PATH, obj.get_test_service_prefix())
                     print(
                         f"disabled and removed {services_count} services of type {str(obj)}"
                     )
