@@ -114,11 +114,22 @@ def parse_sd_test_cmd_result(result: subprocess.CompletedProcess) -> str:
 
 
 def plot(
-    res_dict: dict, num_services_list: list, rmse: float, output_file_name: str
+    res_dict: dict,
+    num_services_list: list,
+    rmse: float,
+    output_file_name: str,
+    generator_types: list,
+    dag_edge_probability: float,
 ) -> None:
     """plot units load time against the number of test services"""
     fig = plt.figure(figsize=(25, 15))
-    fig.suptitle(f"units load time test\n(RMSE = {rmse:.{4}f})", fontsize=20)
+    generator_types_str = "generator types: [" + " ".join(generator_types) + "]"
+    if "dag" in generator_types:
+        generator_types_str += f"\ndag edge probability = {dag_edge_probability}"
+    rmse_str = f"RMSE: {rmse:.{4}f}"
+    fig.suptitle(
+        f"units load time test\n\n{generator_types_str}\n{rmse_str}", fontsize=20
+    )
     colors = ["green", "red"]
     horizontal_alignments = ["right", "left"]
     offsets = [-1, 1]
@@ -165,7 +176,12 @@ def plot(
 
 
 def write_json(
-    res_dict: dict, services_num_list: list, rmse: float, output_file_name: str
+    res_dict: dict,
+    services_num_list: list,
+    rmse: float,
+    output_file_name: str,
+    generator_types: list,
+    dag_edge_probability: float,
 ) -> None:
     """write test results to json file"""
     json_str_dict = {}
@@ -175,6 +191,9 @@ def write_json(
                 zip(services_num_list, res_dict_value)
             )
         }
+    json_str_dict["generator types"] = generator_types
+    if "dag" in generator_types:
+        json_str_dict["dag edge probability"] = dag_edge_probability
     json_str_dict["rmse"] = round(rmse, 4)
     with open(output_file_name + ".json", "w", encoding="utf-8") as json_file:
         json.dump(json_str_dict, json_file, indent=2)
@@ -235,8 +254,22 @@ def run_tests(args: argparse.Namespace) -> None:
             results_dict[sd_bin_path].append(units_load_time_in_sec)
     rmse = calc_rmse(results_dict)
     print(f"rmse error = {rmse:.{4}f}")
-    plot(results_dict, services_num_list, rmse, args.output_files_name)
-    write_json(results_dict, services_num_list, rmse, args.output_files_name)
+    plot(
+        results_dict,
+        services_num_list,
+        rmse,
+        args.output_files_name,
+        args.gen_types,
+        args.dag_edge_probability,
+    )
+    write_json(
+        results_dict,
+        services_num_list,
+        rmse,
+        args.output_files_name,
+        args.gen_types,
+        args.dag_edge_probability,
+    )
     run_cmd(services_remove_cmd, ROOT_UID, ROOT_GID)
 
 
