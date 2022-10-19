@@ -10,7 +10,7 @@ so, it doesn't depend on any services.
 - [dag]: directed acyclic graph of random service dependeencies with edge probability option to control the
 amount of possible edges (dependencies) between services.
 
-## Packages needs to be installed:
+## Packages need to be installed:
 pystemd: https://github.com/facebookincubator/pystemd 
 
 ## Options:
@@ -62,7 +62,7 @@ $ sudo python3 generate_services.py -a
 run load test based on a test services generator, the results are printed to a json file 
 and a plot is generated for the data collected from 2 different systemd binaries. 
 
-## Packages needs to be installed:
+## Packages need to be installed:
 matplotlib: https://matplotlib.org/stable/users/installing/index.html
 
 ## Options:
