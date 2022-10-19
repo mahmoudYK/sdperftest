@@ -59,7 +59,7 @@ $ sudo python3 generate_services.py -a
 
 ## run_sd_load_tests.py
 
-run load test based on a test services generator, the results are printed to a json file 
+Run load test based on a test services generator, the results are printed to a json file 
 and a plot is generated for the data collected from 2 different systemd binaries. 
 
 ## Packages need to be installed:
@@ -88,7 +88,7 @@ matplotlib: https://matplotlib.org/stable/users/installing/index.html
                         name of output json data and jpeg plot files
 
 ## Examples:
-Generate this sequence of 'dag' services numbers with edge probability=0.2 [500 1000 1500 2000 2500].
+Generate this sequence of 'dag' services numbers (with edge probability=0.2): [500 1000 1500 2000 2500].
 Use EUID and EGID of 1000 to run 'systemd --test --system --no-pager' command for each number of 
 generated services. The output files should be named results.json and results.jpg.
 ```sh
