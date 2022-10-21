@@ -86,13 +86,15 @@ matplotlib: https://matplotlib.org/stable/users/installing/index.html
                         user GID to run systemd in test mode
 -  -o OUTPUT_FILES_NAME, --output_files_name OUTPUT_FILES_NAME  
                         name of output json data and jpeg plot files
+-  -r OUTPUT_FILES_DIR, --output_files_dir OUTPUT_FILES_DIR  
+                        output artifacts dir
 
 ## Examples:
 Generate this sequence of 'dag' services numbers (with edge probability=0.2): [500 1000 1500 2000 2500].
 Use EUID and EGID of 1000 to run 'systemd --test --system --no-pager' command for each number of 
 generated services. The output files should be named results.json and results.jpg.
 ```sh
-$ sudo python3 run_tests.py -t dag -p .2 -s 500 -j 500 -n 5 -d $SD_BIN_PATH1/systemd -d $SD_BIN_PATH2/systemd -o results -u 1000 -g 1000
+$ sudo python3 run_tests.py -t dag -p .2 -s 500 -j 500 -n 5 -d $SD_BIN_PATH1/systemd -d $SD_BIN_PATH2/systemd -o results -r $OUTPUT_DIR -u 1000 -g 1000
 ```
 
 ## License:
