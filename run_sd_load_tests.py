@@ -26,6 +26,7 @@ PYTHON_PATH = "/usr/bin/python"
 SERVICES_GENERATOR_SCRIPT = "generate_services.py"
 SYSTEMD_SYSTEM_PATH = "/etc/systemd/system/"
 DEFAULT_OUTPUT_ARTIFACTS_FILE_NAME = "sd_load_test"
+DEFAULT_OUTPUT_ARTIFACTS_DIR = os.getcwd()
 
 
 def fail(fail_message: str) -> None:
@@ -117,7 +118,8 @@ def plot(
     res_dict: dict,
     num_services_list: list,
     rmse: float,
-    output_file_name: str,
+    output_files_name: str,
+    output_files_dir: str,
     generator_types: list,
     dag_edge_probability: float,
 ) -> None:
@@ -172,14 +174,15 @@ def plot(
     plt.xlabel("number of test services", fontsize=15)
     plt.ylabel("units load time (sec)", fontsize=15)
     plt.legend(handles=patches, loc="upper left")
-    plt.savefig(output_file_name + ".jpg", dpi=250)
+    plt.savefig(os.path.join(output_files_dir, output_files_name + ".jpg"), dpi=250)
 
 
 def write_json(
     res_dict: dict,
     services_num_list: list,
     rmse: float,
-    output_file_name: str,
+    output_files_name: str,
+    output_files_dir: str,
     generator_types: list,
     dag_edge_probability: float,
 ) -> None:
@@ -195,7 +198,11 @@ def write_json(
     if "dag" in generator_types:
         json_str_dict["dag edge probability"] = dag_edge_probability
     json_str_dict["rmse"] = round(rmse, 4)
-    with open(output_file_name + ".json", "w", encoding="utf-8") as json_file:
+    with open(
+        os.path.join(output_files_dir, output_files_name + ".json"),
+        "w",
+        encoding="utf-8",
+    ) as json_file:
         json.dump(json_str_dict, json_file, indent=2)
 
 
@@ -222,6 +229,7 @@ def calc_rmse(res_dict: dict) -> float:
 
 def remove_exisiting_test_services() -> None:
     """remove all test services"""
+    print(f"remove already existing test services from {SYSTEMD_SYSTEM_PATH}")
     service_types = ["parallel", "single_path", "dag"]
     services_remove_cmd = assemble_service_gen_cmd(service_types, remove=True)
     run_cmd(services_remove_cmd, ROOT_UID, ROOT_GID)
@@ -259,6 +267,7 @@ def run_tests(args: argparse.Namespace) -> None:
         services_num_list,
         rmse,
         args.output_files_name,
+        args.output_files_dir,
         args.gen_types,
         args.dag_edge_probability,
     )
@@ -267,6 +276,7 @@ def run_tests(args: argparse.Namespace) -> None:
         services_num_list,
         rmse,
         args.output_files_name,
+        args.output_files_dir,
         args.gen_types,
         args.dag_edge_probability,
     )
@@ -344,6 +354,14 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default=DEFAULT_OUTPUT_ARTIFACTS_FILE_NAME,
         help="name of output json data and jpeg plot files",
+    )
+
+    parser.add_argument(
+        "-r",
+        "--output_files_dir",
+        type=str,
+        default=DEFAULT_OUTPUT_ARTIFACTS_DIR,
+        help="output artifacts dir",
     )
 
     return parser.parse_args()
