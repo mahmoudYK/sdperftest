@@ -35,6 +35,14 @@ def fail(fail_message: str) -> None:
     sys.exit(1)
 
 
+def print_dash_line() -> None:
+    """print a dash line to stdout"""
+    print(
+        "-------------------------------------------------------------------------------------------",
+        file=sys.stdout,
+    )
+
+
 def assemble_service_gen_cmd(
     types: list,
     remove: bool,
@@ -124,6 +132,7 @@ def plot(
     dag_edge_probability: float,
 ) -> None:
     """plot units load time against the number of test services"""
+    print("plotting ...")
     fig = plt.figure(figsize=(25, 15))
     generator_types_str = "generator types: [" + " ".join(generator_types) + "]"
     if "dag" in generator_types:
@@ -174,7 +183,9 @@ def plot(
     plt.xlabel("number of test services", fontsize=15)
     plt.ylabel("units load time (sec)", fontsize=15)
     plt.legend(handles=patches, loc="upper left")
-    plt.savefig(os.path.join(output_files_dir, output_files_name + ".jpg"), dpi=250)
+    fig_path = os.path.join(output_files_dir, output_files_name + ".jpg")
+    plt.savefig(fig_path, dpi=250)
+    print(f"saved figure at {fig_path}")
 
 
 def write_json(
@@ -187,6 +198,7 @@ def write_json(
     dag_edge_probability: float,
 ) -> None:
     """write test results to json file"""
+    print("writing json file ...")
     json_str_dict = {}
     for res_dict_key, res_dict_value in res_dict.items():
         json_str_dict[res_dict_key] = {
@@ -198,12 +210,14 @@ def write_json(
     if "dag" in generator_types:
         json_str_dict["dag edge probability"] = dag_edge_probability
     json_str_dict["rmse"] = round(rmse, 4)
+    json_file_path = os.path.join(output_files_dir, output_files_name + ".json")
     with open(
-        os.path.join(output_files_dir, output_files_name + ".json"),
+        json_file_path,
         "w",
         encoding="utf-8",
     ) as json_file:
         json.dump(json_str_dict, json_file, indent=2)
+    print(f"saved json data at {json_file_path}")
 
 
 def calc_rmse(res_dict: dict) -> float:
@@ -229,7 +243,7 @@ def calc_rmse(res_dict: dict) -> float:
 
 def remove_exisiting_test_services() -> None:
     """remove all test services"""
-    print(f"remove already existing test services from {SYSTEMD_SYSTEM_PATH}")
+    print(f"removing existing test services at {SYSTEMD_SYSTEM_PATH}")
     service_types = ["parallel", "single_path", "dag"]
     services_remove_cmd = assemble_service_gen_cmd(service_types, remove=True)
     run_cmd(services_remove_cmd, ROOT_UID, ROOT_GID)
@@ -237,6 +251,10 @@ def remove_exisiting_test_services() -> None:
 
 def run_tests(args: argparse.Namespace) -> None:
     """generate services and run tests on the 2 systemd binaries"""
+    print_dash_line()
+    print(
+        f"generating test services and running systemd in test mode for {args.tests_num} times..."
+    )
     results_dict = collections.defaultdict(list)
     services_remove_cmd = assemble_service_gen_cmd(args.gen_types, remove=True)
     services_num_list = list(
@@ -261,7 +279,9 @@ def run_tests(args: argparse.Namespace) -> None:
             print(f"units load time in seconds = {units_load_time_in_sec} s")
             results_dict[sd_bin_path].append(units_load_time_in_sec)
     rmse = calc_rmse(results_dict)
+    print_dash_line()
     print(f"rmse error = {rmse:.{4}f}")
+    print_dash_line()
     plot(
         results_dict,
         services_num_list,
@@ -271,6 +291,7 @@ def run_tests(args: argparse.Namespace) -> None:
         args.gen_types,
         args.dag_edge_probability,
     )
+    print_dash_line()
     write_json(
         results_dict,
         services_num_list,
@@ -280,7 +301,10 @@ def run_tests(args: argparse.Namespace) -> None:
         args.gen_types,
         args.dag_edge_probability,
     )
+    print_dash_line()
     run_cmd(services_remove_cmd, ROOT_UID, ROOT_GID)
+    print_dash_line()
+    print("done!")
 
 
 def parse_args() -> argparse.Namespace:
