@@ -24,7 +24,7 @@ DEFAULT_NONROOT_USER_UID = 1000
 DEFAULT_NONROOT_USER_GID = 1000
 PYTHON_PATH = "/usr/bin/python"
 SERVICES_GENERATOR_SCRIPT = "generate_services.py"
-SYSTEMD_SYSTEM_PATH = "/etc/systemd/system/"
+SYSTEMD_SYSTEM_PATH = "/run/systemd/system/"
 DEFAULT_OUTPUT_ARTIFACTS_FILE_NAME = "sd_load_test"
 DEFAULT_OUTPUT_ARTIFACTS_DIR = os.getcwd()
 

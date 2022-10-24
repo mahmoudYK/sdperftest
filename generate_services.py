@@ -20,7 +20,7 @@ import pystemd.systemd1
 import pystemd.dbuslib
 
 
-SYSTEMD_SYSTEM_PATH = "/etc/systemd/system/"
+SYSTEMD_SYSTEM_PATH = "/run/systemd/system/"
 DEFAULT_NUM_OF_SERVICES = 500
 DEFAULT_EDGE_PROBABILITY = 0.1
 RANDOM_SEED = 2
