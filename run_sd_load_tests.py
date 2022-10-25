@@ -11,6 +11,7 @@ import functools
 import collections
 import math
 import json
+import dataclasses
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
@@ -29,18 +30,34 @@ DEFAULT_OUTPUT_ARTIFACTS_FILE_NAME = "sd_load_test"
 DEFAULT_OUTPUT_ARTIFACTS_DIR = os.getcwd()
 
 
+@dataclasses.dataclass
+class ErrorStats:
+    '''error statistics data class'''
+    abs_error: list
+    mean_abs: float
+    max_abs: float
+    min_abs: float
+    stddev_abs: float
+    percent_error: list
+    mean_percent: float
+    max_percent: float
+    min_percent: float
+    stddev_percent: float
+
+
 def fail(fail_message: str) -> None:
     """print error message and exit with status 1"""
     print(f"Error: {fail_message}", file=sys.stderr)
     sys.exit(1)
 
 
-def print_dash_line() -> None:
+def print_line(num_of_lines: int = 1, length: int = 100, char: str = "-") -> None:
     """print a dash line to stdout"""
-    print(
-        "-------------------------------------------------------------------------------------------",
-        file=sys.stdout,
-    )
+    for _ in range(num_of_lines):
+        print(
+            char * length,
+            file=sys.stdout,
+        )
 
 
 def assemble_service_gen_cmd(
@@ -241,6 +258,76 @@ def calc_rmse(res_dict: dict) -> float:
             )
 
 
+def calc_error_stats(res_dict: dict) -> ErrorStats:
+    """calculate min, max, mean and stddev of absolute error"""
+    if len(res_dict) != 2:
+        fail("calc_error_stats fn needs a res_dict with 2 lists of values")
+    results_list = list(res_dict.values())
+    abs_error_list = [
+        round(abs(first - second), 4)
+        for first, second in zip(results_list[0], results_list[1])
+    ]
+    # assuming that the first systemd binary (passed by -d) is the reference binary
+    percent_error_list = [
+        round((abs_error / first) * 100, 4)
+        for abs_error, first in zip(abs_error_list, results_list[0])
+    ]
+    max_error_abs = max(abs_error_list)
+    min_error_abs = min(abs_error_list)
+    mean_error_abs = round(statistics.mean(abs_error_list), 4)
+    stddev_error_abs = round(statistics.stdev(abs_error_list), 4)
+    max_error_perc = max(percent_error_list)
+    min_error_perc = min(percent_error_list)
+    mean_error_perc = round(statistics.mean(percent_error_list), 4)
+    stddev_error_perc = round(statistics.stdev(percent_error_list), 4)
+    return ErrorStats(
+        abs_error_list,
+        mean_error_abs,
+        max_error_abs,
+        min_error_abs,
+        stddev_error_abs,
+        percent_error_list,
+        mean_error_perc,
+        max_error_perc,
+        min_error_perc,
+        stddev_error_perc,
+    )
+
+
+def print_error_stats(res_dict: dict, error_stats: ErrorStats) -> None:
+    """print the error statistics calculated from res_dict value lists"""
+    print("error statistics:\n")
+    print_line(length=80)
+    print(
+        f"{'reference sd' : <20}{'compared sd' : <20}{'absolute error' : <20}{'percentage error(%)' : <20}"
+    )
+    print_line(length=80)
+    # 2 lists have the same size
+    ref_sd_load_time_list = list(res_dict.values())[0]
+    compared_sd_load_time_list = list(res_dict.values())[1]
+    for test_num, load_time in enumerate(ref_sd_load_time_list):
+        print(
+            f"{load_time : <20}{compared_sd_load_time_list[test_num] : <20}{error_stats.abs_error[test_num] : <20}{error_stats.percent_error[test_num] : <20}"
+        )
+    print_line(length=80)
+    print(
+        f"{'measure' : <20}{' ' : <20}{'absolute error' : <20}{'percentage error(%)' : <20}"
+    )
+    print_line(length=80)
+    print(
+        f"{'max' : <20}{' ' : <20}{error_stats.max_abs : <20}{error_stats.max_percent : <20}"
+    )
+    print(
+        f"{'min' : <20}{' ' : <20}{error_stats.min_abs : <20}{error_stats.min_percent : <20}"
+    )
+    print(
+        f"{'mean' : <20}{' ' : <20}{error_stats.mean_abs : <20}{error_stats.mean_percent : <20}"
+    )
+    print(
+        f"{'stddev' : <20}{' ' : <20}{error_stats.stddev_abs : <20}{error_stats.stddev_percent : <20}"
+    )
+
+
 def remove_exisiting_test_services() -> None:
     """remove all test services"""
     print(f"removing existing test services at {SYSTEMD_SYSTEM_PATH}")
@@ -251,7 +338,7 @@ def remove_exisiting_test_services() -> None:
 
 def run_tests(args: argparse.Namespace) -> None:
     """generate services and run tests on the 2 systemd binaries"""
-    print_dash_line()
+    print_line(char="#")
     print(
         f"generating test services and running systemd in test mode for {args.tests_num} times..."
     )
@@ -273,15 +360,22 @@ def run_tests(args: argparse.Namespace) -> None:
         )
         run_cmd(services_gen_cmd, ROOT_UID, ROOT_GID)
         for sd_bin_path in args.systemd_bin_path:
-            sd_test_cmd = [sd_bin_path, "--test", "--system", "--no-pager"]
+            sd_test_cmd = [
+                sd_bin_path,
+                "--test",
+                "--system",
+                "--unit",
+                "multi-user.target",
+                "--no-pager",
+            ]
             result = run_cmd(sd_test_cmd, args.user_uid, args.user_gid, capture=True)
             units_load_time_in_sec = parse_sd_test_cmd_result(result)
             print(f"units load time in seconds = {units_load_time_in_sec} s")
             results_dict[sd_bin_path].append(units_load_time_in_sec)
     rmse = calc_rmse(results_dict)
-    print_dash_line()
+    print_line(char="#")
     print(f"rmse error = {rmse:.{4}f}")
-    print_dash_line()
+    print_line(char="#")
     plot(
         results_dict,
         services_num_list,
@@ -291,7 +385,7 @@ def run_tests(args: argparse.Namespace) -> None:
         args.gen_types,
         args.dag_edge_probability,
     )
-    print_dash_line()
+    print_line(char="#")
     write_json(
         results_dict,
         services_num_list,
@@ -301,9 +395,12 @@ def run_tests(args: argparse.Namespace) -> None:
         args.gen_types,
         args.dag_edge_probability,
     )
-    print_dash_line()
+    print_line(char="#")
+    error_stats = calc_error_stats(results_dict)
+    print_error_stats(results_dict, error_stats)
+    print_line(char="#")
     run_cmd(services_remove_cmd, ROOT_UID, ROOT_GID)
-    print_dash_line()
+    print_line(char="#")
     print("done!")
 
 
@@ -402,7 +499,7 @@ def main() -> None:
 
     args = parse_args()
 
-    if len(args.systemd_bin_path) != 2:
+    if not args.systemd_bin_path or len(args.systemd_bin_path) != 2:
         fail("at least 2 systemd bin dirs should be used.")
 
     elif len(args.gen_types) < 1:
