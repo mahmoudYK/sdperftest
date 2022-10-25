@@ -45,6 +45,17 @@ class ErrorStats:
     stddev_percent: float
 
 
+@dataclasses.dataclass
+class TestRunnerInfo:
+    sdpath_loadtime_dict: dict
+    generated_services_num_list: list
+    rmse: float
+    output_files_name: str
+    output_files_dir: str
+    generator_types: list
+    dag_edge_probability: float
+    error_stats:ErrorStats
+
 def fail(fail_message: str) -> None:
     """print error message and exit with status 1"""
     print(f"Error: {fail_message}", file=sys.stderr)
@@ -297,34 +308,37 @@ def calc_error_stats(res_dict: dict) -> ErrorStats:
 def print_error_stats(res_dict: dict, error_stats: ErrorStats) -> None:
     """print the error statistics calculated from res_dict value lists"""
     print("error statistics:\n")
-    print_line(length=80)
+    print_line(length=105)
     print(
-        f"{'reference sd' : <20}{'compared sd' : <20}{'absolute error' : <20}{'percentage error(%)' : <20}"
+        f"{'load time(s)' : <20}{'load time(s)' : <20}{'absolute error' : <30}{'percentage error(%)' : <30}"
     )
-    print_line(length=80)
+    print(
+        f"{'reference sd' : <20}{'compared sd' : <20}{'abs(ref_lt - comp_lt)' : <30}{'(abs(ref_lt - comp_lt)/ref_lt)*100' : <30}"
+    )
+    print_line(length=105)
     # 2 lists have the same size
     ref_sd_load_time_list = list(res_dict.values())[0]
     compared_sd_load_time_list = list(res_dict.values())[1]
     for test_num, load_time in enumerate(ref_sd_load_time_list):
         print(
-            f"{load_time : <20}{compared_sd_load_time_list[test_num] : <20}{error_stats.abs_error[test_num] : <20}{error_stats.percent_error[test_num] : <20}"
+            f"{load_time : <20}{compared_sd_load_time_list[test_num] : <20}{error_stats.abs_error[test_num] : <30}{error_stats.percent_error[test_num] : <30}"
         )
-    print_line(length=80)
+    print_line(length=105)
     print(
-        f"{'measure' : <20}{' ' : <20}{'absolute error' : <20}{'percentage error(%)' : <20}"
+        f"{'measure' : <20}{' ' : <20}{'absolute error' : <30}{'percentage error(%)' : <30}"
     )
-    print_line(length=80)
+    print_line(length=105)
     print(
-        f"{'max' : <20}{' ' : <20}{error_stats.max_abs : <20}{error_stats.max_percent : <20}"
-    )
-    print(
-        f"{'min' : <20}{' ' : <20}{error_stats.min_abs : <20}{error_stats.min_percent : <20}"
+        f"{'max' : <20}{' ' : <20}{error_stats.max_abs : <30}{error_stats.max_percent : <30}"
     )
     print(
-        f"{'mean' : <20}{' ' : <20}{error_stats.mean_abs : <20}{error_stats.mean_percent : <20}"
+        f"{'min' : <20}{' ' : <20}{error_stats.min_abs : <30}{error_stats.min_percent : <30}"
     )
     print(
-        f"{'stddev' : <20}{' ' : <20}{error_stats.stddev_abs : <20}{error_stats.stddev_percent : <20}"
+        f"{'mean' : <20}{' ' : <20}{error_stats.mean_abs : <30}{error_stats.mean_percent : <30}"
+    )
+    print(
+        f"{'stddev' : <20}{' ' : <20}{error_stats.stddev_abs : <30}{error_stats.stddev_percent : <30}"
     )
 
 
