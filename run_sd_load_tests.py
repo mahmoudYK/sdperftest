@@ -32,7 +32,8 @@ DEFAULT_OUTPUT_ARTIFACTS_DIR = os.getcwd()
 
 @dataclasses.dataclass
 class ErrorStats:
-    '''error statistics data class'''
+    """error statistics data class"""
+
     abs_error: list
     mean_abs: float
     max_abs: float
@@ -46,7 +47,7 @@ class ErrorStats:
 
 
 @dataclasses.dataclass
-class TestRunnerInfo:
+class OutputArtifactsInfo:
     sdpath_loadtime_dict: dict
     generated_services_num_list: list
     rmse: float
@@ -54,7 +55,8 @@ class TestRunnerInfo:
     output_files_dir: str
     generator_types: list
     dag_edge_probability: float
-    error_stats:ErrorStats
+    error_stats: ErrorStats
+
 
 def fail(fail_message: str) -> None:
     """print error message and exit with status 1"""
@@ -150,22 +152,14 @@ def parse_sd_test_cmd_result(result: subprocess.CompletedProcess) -> str:
     fail("can't parse the stderr output of the cmd: systemd --test.")
 
 
-def plot(
-    res_dict: dict,
-    num_services_list: list,
-    rmse: float,
-    output_files_name: str,
-    output_files_dir: str,
-    generator_types: list,
-    dag_edge_probability: float,
-) -> None:
+def plot(info: OutputArtifactsInfo) -> None:
     """plot units load time against the number of test services"""
     print("plotting ...")
     fig = plt.figure(figsize=(25, 15))
-    generator_types_str = "generator types: [" + " ".join(generator_types) + "]"
-    if "dag" in generator_types:
-        generator_types_str += f"\ndag edge probability = {dag_edge_probability}"
-    rmse_str = f"RMSE: {rmse:.{4}f}"
+    generator_types_str = "generator types: [" + " ".join(info.generator_types) + "]"
+    if "dag" in info.generator_types:
+        generator_types_str += f"\ndag edge probability = {info.dag_edge_probability}"
+    rmse_str = f"RMSE: {info.rmse:.{4}f}"
     fig.suptitle(
         f"units load time test\n\n{generator_types_str}\n{rmse_str}", fontsize=20
     )
@@ -175,14 +169,14 @@ def plot(
     patches = []
     x_ticks = []
     for sd_path, color, horizontal_alignment, offset in zip(
-        res_dict.keys(), colors, horizontal_alignments, offsets
+        info.sdpath_loadtime_dict.keys(), colors, horizontal_alignments, offsets
     ):
-        load_time = res_dict[sd_path]
-        plt.plot(num_services_list, load_time, color=color, linewidth=1)
+        load_time = info.sdpath_loadtime_dict[sd_path]
+        plt.plot(info.generated_services_num_list, load_time, color=color, linewidth=1)
         patches.append(mpatches.Patch(color=color, label=sd_path))
         x_ticks, _ = plt.xticks()
         x_offset = (x_ticks[1] - x_ticks[0]) / 25
-        for idx, num_services in enumerate(num_services_list):
+        for idx, num_services in enumerate(info.generated_services_num_list):
             plt.text(
                 num_services + (offset * x_offset),
                 load_time[idx],
@@ -198,7 +192,7 @@ def plot(
                 y=load_time[idx], color="black", linestyle="dotted", linewidth=0.1
             )
     bottom_y_limit, _ = plt.ylim()
-    for idx, num_services in enumerate(num_services_list):
+    for idx, num_services in enumerate(info.generated_services_num_list):
         if num_services not in x_ticks:
             plt.text(
                 num_services,
@@ -211,34 +205,28 @@ def plot(
     plt.xlabel("number of test services", fontsize=15)
     plt.ylabel("units load time (sec)", fontsize=15)
     plt.legend(handles=patches, loc="upper left")
-    fig_path = os.path.join(output_files_dir, output_files_name + ".jpg")
+    fig_path = os.path.join(info.output_files_dir, info.output_files_name + ".jpg")
     plt.savefig(fig_path, dpi=250)
     print(f"saved figure at {fig_path}")
 
 
-def write_json(
-    res_dict: dict,
-    services_num_list: list,
-    rmse: float,
-    output_files_name: str,
-    output_files_dir: str,
-    generator_types: list,
-    dag_edge_probability: float,
-) -> None:
+def write_json(info: OutputArtifactsInfo) -> None:
     """write test results to json file"""
     print("writing json file ...")
     json_str_dict = {}
-    for res_dict_key, res_dict_value in res_dict.items():
+    for res_dict_key, res_dict_value in info.sdpath_loadtime_dict.items():
         json_str_dict[res_dict_key] = {
             "num of services:service load time": dict(
-                zip(services_num_list, res_dict_value)
+                zip(info.generated_services_num_list, res_dict_value)
             )
         }
-    json_str_dict["generator types"] = generator_types
-    if "dag" in generator_types:
-        json_str_dict["dag edge probability"] = dag_edge_probability
-    json_str_dict["rmse"] = round(rmse, 4)
-    json_file_path = os.path.join(output_files_dir, output_files_name + ".json")
+    json_str_dict["generator types"] = info.generator_types
+    if "dag" in info.generator_types:
+        json_str_dict["dag edge probability"] = info.dag_edge_probability
+    json_str_dict["rmse"] = round(info.rmse, 4)
+    json_file_path = os.path.join(
+        info.output_files_dir, info.output_files_name + ".json"
+    )
     with open(
         json_file_path,
         "w",
@@ -305,40 +293,60 @@ def calc_error_stats(res_dict: dict) -> ErrorStats:
     )
 
 
-def print_error_stats(res_dict: dict, error_stats: ErrorStats) -> None:
+def print_error_stats(info: OutputArtifactsInfo) -> None:
     """print the error statistics calculated from res_dict value lists"""
     print("error statistics:\n")
-    print_line(length=105)
+    print_line(length=120)
     print(
-        f"{'load time(s)' : <20}{'load time(s)' : <20}{'absolute error' : <30}{'percentage error(%)' : <30}"
+        f"{'services number' : <20}\
+{'load time(s)' : <20}\
+{'load time(s)' : <20}\
+{'absolute error' : <25}\
+{'percentage error(%)' : <25}"
     )
     print(
-        f"{'reference sd' : <20}{'compared sd' : <20}{'abs(ref_lt - comp_lt)' : <30}{'(abs(ref_lt - comp_lt)/ref_lt)*100' : <30}"
+        f"{'generated' : <20}\
+{'reference sd' : <20}\
+{'compared sd' : <20}\
+{'abs(ref_lt - comp_lt)' : <25}\
+{'(abs(ref_lt - comp_lt)/ref_lt)*100' : <25}"
     )
-    print_line(length=105)
+    print_line(length=120)
     # 2 lists have the same size
-    ref_sd_load_time_list = list(res_dict.values())[0]
-    compared_sd_load_time_list = list(res_dict.values())[1]
+    ref_sd_load_time_list = list(info.sdpath_loadtime_dict.values())[0]
+    compared_sd_load_time_list = list(info.sdpath_loadtime_dict.values())[1]
     for test_num, load_time in enumerate(ref_sd_load_time_list):
         print(
-            f"{load_time : <20}{compared_sd_load_time_list[test_num] : <20}{error_stats.abs_error[test_num] : <30}{error_stats.percent_error[test_num] : <30}"
+            f"{info.generated_services_num_list[test_num] : <20}\
+{load_time : <20}\
+{compared_sd_load_time_list[test_num] : <20}\
+{info.error_stats.abs_error[test_num] : <25}\
+{info.error_stats.percent_error[test_num] : <25}"
         )
-    print_line(length=105)
+    print_line(length=120)
     print(
-        f"{'measure' : <20}{' ' : <20}{'absolute error' : <30}{'percentage error(%)' : <30}"
+        f"{'measure' : <20}{' ' : <40}{'absolute error' : <25}{'percentage error(%)' : <25}"
     )
-    print_line(length=105)
+    print_line(length=120)
     print(
-        f"{'max' : <20}{' ' : <20}{error_stats.max_abs : <30}{error_stats.max_percent : <30}"
-    )
-    print(
-        f"{'min' : <20}{' ' : <20}{error_stats.min_abs : <30}{error_stats.min_percent : <30}"
-    )
-    print(
-        f"{'mean' : <20}{' ' : <20}{error_stats.mean_abs : <30}{error_stats.mean_percent : <30}"
+        f"{'max' : <20}{' ' : <40}\
+{info.error_stats.max_abs : <25}\
+{info.error_stats.max_percent : <25}"
     )
     print(
-        f"{'stddev' : <20}{' ' : <20}{error_stats.stddev_abs : <30}{error_stats.stddev_percent : <30}"
+        f"{'min' : <20}{' ' : <40}\
+{info.error_stats.min_abs : <25}\
+{info.error_stats.min_percent : <25}"
+    )
+    print(
+        f"{'mean' : <20}{' ' : <40}\
+{info.error_stats.mean_abs : <25}\
+{info.error_stats.mean_percent : <25}"
+    )
+    print(
+        f"{'stddev' : <20}{' ' : <40}\
+{info.error_stats.stddev_abs : <25}\
+{info.error_stats.stddev_percent : <25}"
     )
 
 
@@ -390,28 +398,22 @@ def run_tests(args: argparse.Namespace) -> None:
     print_line(char="#")
     print(f"rmse error = {rmse:.{4}f}")
     print_line(char="#")
-    plot(
-        results_dict,
-        services_num_list,
-        rmse,
-        args.output_files_name,
-        args.output_files_dir,
-        args.gen_types,
-        args.dag_edge_probability,
-    )
-    print_line(char="#")
-    write_json(
-        results_dict,
-        services_num_list,
-        rmse,
-        args.output_files_name,
-        args.output_files_dir,
-        args.gen_types,
-        args.dag_edge_probability,
-    )
-    print_line(char="#")
     error_stats = calc_error_stats(results_dict)
-    print_error_stats(results_dict, error_stats)
+    info = OutputArtifactsInfo(
+        results_dict,
+        services_num_list,
+        rmse,
+        args.output_files_name,
+        args.output_files_dir,
+        args.gen_types,
+        args.dag_edge_probability,
+        error_stats,
+    )
+    plot(info)
+    print_line(char="#")
+    write_json(info)
+    print_line(char="#")
+    print_error_stats(info)
     print_line(char="#")
     run_cmd(services_remove_cmd, ROOT_UID, ROOT_GID)
     print_line(char="#")
