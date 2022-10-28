@@ -29,7 +29,7 @@ fail() {
 
 
 if [ ! $# -eq 2 ]; then
-	if [ $1 == "-h" ]; then
+	if [ "$1" = "-h" ]; then
 		usage
 		exit $EXIT_SUCCESS
 	else
