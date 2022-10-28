@@ -12,6 +12,7 @@ import collections
 import math
 import json
 import dataclasses
+import git
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
@@ -27,6 +28,8 @@ PYTHON_PATH = "/usr/bin/python"
 SERVICES_GENERATOR_SCRIPT = "generate_services.py"
 SYSTEMD_SYSTEM_PATH = "/run/systemd/system/"
 DEFAULT_OUTPUT_ARTIFACTS_FILE_NAME = "sd_load_test"
+SD_BUILD_SCRIPT = "./build_sd.sh"
+SD_BUILD_DIR = "sd_build_load_test"
 DEFAULT_OUTPUT_ARTIFACTS_DIR = os.getcwd()
 
 
@@ -34,12 +37,12 @@ DEFAULT_OUTPUT_ARTIFACTS_DIR = os.getcwd()
 class ErrorStats:
     """error statistics data class"""
 
-    abs_error: list
+    abs_error: list[float]
     mean_abs: float
     max_abs: float
     min_abs: float
     stddev_abs: float
-    percent_error: list
+    percent_error: list[float]
     mean_percent: float
     max_percent: float
     min_percent: float
@@ -48,12 +51,12 @@ class ErrorStats:
 
 @dataclasses.dataclass
 class OutputArtifactsInfo:
-    sdpath_loadtime_dict: dict
-    generated_services_num_list: list
+    sdpath_loadtime_dict: dict[str,list[float]]
+    generated_services_num_list: list[int]
     rmse: float
     output_files_name: str
     output_files_dir: str
-    generator_types: list
+    generator_types: list[str]
     dag_edge_probability: float
     error_stats: ErrorStats
 
@@ -112,6 +115,26 @@ def run_cmd(
         fail(f"running {cmd_str} failed, returncode: {ex.returncode}")
 
 
+def parse_sd_path_mode(args:argparse.Namespace) -> list:
+    #args.sd_path_mode == "exe" and (not args.sd_ref_exe_path or not args.sd_comp_exe_path)
+    match args.sd_path_mode:
+        case "exe":
+            return [args.sd_ref_exe_path, args.sd_comp_exe_path]
+        case "commit":
+            commit_hash_list = [args.sd_commit_ref, args.sd_commit_comp]
+            sd_exe_path_list = []
+            os.chmod(SD_BUILD_SCRIPT,0o755)
+            for commit_hash in commit_hash_list:
+                sd_build_cmd = [SD_BUILD_SCRIPT, "-d", SD_BUILD_DIR, "-c", commit_hash]
+                result = run_cmd(sd_build_cmd, args.user_uid, args.user_gid, capture=True)
+                # exe path example:
+                # sd_build_load_test/6fadf01cf3cdd98f78b7829f4c6c892306958394/systemd/build/systemd
+                sd_exe_path_list.append(os.path.join(SD_BUILD_DIR, commit_hash,"systemd","build","systemd"))
+            return sd_exe_path_list   
+        case _:
+            fail("not supportd sd path mode")
+
+
 def to_seconds(func):
     """decorator to convert time resolution to seconds"""
 
@@ -135,6 +158,8 @@ def to_seconds(func):
                     load_time += t_value * 60
                 case "h":
                     load_time += t_value * 60 * 60
+                case _:
+                    load_time = float(math.inf)
         return load_time
 
     return functools.update_wrapper(wrapper, func)
@@ -364,6 +389,7 @@ def run_tests(args: argparse.Namespace) -> None:
     print(
         f"generating test services and running systemd in test mode for {args.tests_num} times..."
     )
+    sd_exe_paths = parse_sd_path_mode(args)
     results_dict = collections.defaultdict(list)
     services_remove_cmd = assemble_service_gen_cmd(args.gen_types, remove=True)
     services_num_list = list(
@@ -381,9 +407,9 @@ def run_tests(args: argparse.Namespace) -> None:
             args.dag_edge_probability,
         )
         run_cmd(services_gen_cmd, ROOT_UID, ROOT_GID)
-        for sd_bin_path in args.systemd_bin_path:
+        for sd_exe_path in sd_exe_paths:
             sd_test_cmd = [
-                sd_bin_path,
+                sd_exe_path,
                 "--test",
                 "--system",
                 "--unit",
@@ -393,7 +419,7 @@ def run_tests(args: argparse.Namespace) -> None:
             result = run_cmd(sd_test_cmd, args.user_uid, args.user_gid, capture=True)
             units_load_time_in_sec = parse_sd_test_cmd_result(result)
             print(f"units load time in seconds = {units_load_time_in_sec} s")
-            results_dict[sd_bin_path].append(units_load_time_in_sec)
+            results_dict[sd_exe_path].append(units_load_time_in_sec)
     rmse = calc_rmse(results_dict)
     print_line(char="#")
     print(f"rmse error = {rmse:.{4}f}")
@@ -425,10 +451,22 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "-d",
-        "--systemd_bin_path",
-        action="append",
-        help="list of systemd bin directories",
+        "-m",
+        "--sd_path_mode",
+        type=str,
+        help="use 2 systemd executable paths or 2 systemd upstream commit hashes [exe,commit]",
+    )
+
+    parser.add_argument(
+        "-e",
+        "--sd_ref_exe_path",
+        help="reference systemd executable path",
+    )
+
+    parser.add_argument(
+        "-f",
+        "--sd_comp_exe_path",
+        help="compared systemd executable path",
     )
 
     parser.add_argument(
@@ -501,6 +539,18 @@ def parse_args() -> argparse.Namespace:
         help="output artifacts dir",
     )
 
+    parser.add_argument(
+        "-c",
+        "--sd_commit_ref",
+        help="commit hash of the reference systemd repo",
+    )
+
+    parser.add_argument(
+        "-d",
+        "--sd_commit_comp",
+        help="commit hash of the compared systemd repo",
+    )
+
     return parser.parse_args()
 
 
@@ -515,10 +565,16 @@ def main() -> None:
 
     args = parse_args()
 
-    if not args.systemd_bin_path or len(args.systemd_bin_path) != 2:
-        fail("at least 2 systemd bin dirs should be used.")
+    if args.sd_path_mode == "exe" and not all((args.sd_ref_exe_path, args.sd_comp_exe_path)):
+        fail("2 systemd exe paths should be used.")
 
-    elif len(args.gen_types) < 1:
+    elif args.sd_path_mode == "commit" and not all((args.sd_commit_ref, args.sd_commit_comp)):
+        fail("2 systemd upstream commit hashes should be used.")
+    
+    elif not args.sd_path_mode:
+        fail("-m|--sd_path_mode should be assigned either exe or commit.")
+
+    if len(args.gen_types) < 1:
         fail(
             "at least 1 service generator type should be used [parallel,single_path,dag]."
         )
