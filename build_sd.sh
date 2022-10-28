@@ -20,7 +20,7 @@ usage() {
 # args:
 # $1: failure msg 
 fail() {
-    echo "error: $1"
+    echo "exit 1, $1"
     cd $INITIAL_WD
     exit $EXIT_ERROR
 }
@@ -46,34 +46,26 @@ MESON_BULD_DIR=build
 # clone git repo to a certain directory.
 # args:
 # $1: git repo to clone
-# $2: directory 
-# return:
-# exit value of the git clone command  
+# $2: directory  
 clone_git_repo() {
     echo "clone : $1"
     git clone $1 $2
-    return $?
 }
 
 
 # checkout a certain commit hash.
 # (NOTE: needs to handle "You are in 'detached HEAD' state")
 # args:
-# $1: commit hash
-# return:
-# exit value of the git checkout command  
+# $1: commit hash 
 checkout_commit_hash() {
     echo "checkout commit hash: $1"
     git checkout $1
-    return $?
 }
 
 
 # build systemd from source code using meson build system and ninja as a backend.
 # args:
 # $1: meson build directory
-# return:
-# exit value of the ninja -C command
 meson_build_sd() {
     if [ ! -f ${1}/build.ninja ]; then
          meson $1 \
@@ -82,7 +74,6 @@ meson_build_sd() {
                 -D mode=developer
     fi
     ninja -C $1
-    return $? 
 }
 
    
