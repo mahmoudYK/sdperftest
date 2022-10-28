@@ -6,13 +6,19 @@ EXIT_ERROR=1
 INITIAL_WD=$(pwd)
 
 usage() {
-	echo "**************************************************"
-	echo "Clone & build systemd using a specific"
-    echo "commit hash: https://github.com/systemd/systemd"
-	echo "Options:"
-	echo "\$1  systemd build dir"
-	echo "\$2  systemd commit hash"
-	echo "**************************************************"
+    cat << EOF
+*********************************************************
+Clone & build systemd using a specific commit hash.
+systemd git repo: https://github.com/systemd/systemd
+Options:
+    -h  print usage and exit
+	-d  systemd build dir
+	-c  systemd git commit hash
+Example:
+    build_sd.sh -h
+    build_sd.sh -d <systemd build dir> -c <commit hash>
+*********************************************************
+EOF
 }
 
 
@@ -26,7 +32,7 @@ fail() {
 }
 
 
-if [ ! $# -eq 2 ]; then
+if [ ! $# -eq 4 ]; then
 	if [ "$1" = "-h" ]; then
 		usage
 		exit $EXIT_SUCCESS
@@ -36,9 +42,26 @@ if [ ! $# -eq 2 ]; then
 	fi
 fi
 
+while :; do
+    case $1 in
+        -d)
+            BUILD_DIR=$2
+            shift 2
+            ;;
+        -c)
+            COMMIT_HASH=$2
+            shift 2
+            break
+            ;;
+        *)
+            usage
+            fail "unkown option used: $1"
+            ;;
+    esac
+done
 
-BUILD_DIR=$1
-COMMIT_HASH=$2
+
+
 SYSTEMD_SOURCE_PATH=${BUILD_DIR}/${COMMIT_HASH}/systemd
 SYSTEMD_GIT_REPO="https://github.com/systemd/systemd"
 MESON_BULD_DIR=build
