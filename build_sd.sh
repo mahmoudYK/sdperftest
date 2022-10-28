@@ -1,8 +1,6 @@
 #!/bin/bash
 # License: LGPL-2.1-or-later
 
-set -e
-
 EXIT_SUCCESS=0
 EXIT_ERROR=1
 INITIAL_WD=$(pwd)
@@ -77,13 +75,12 @@ checkout_commit_hash() {
 # return:
 # exit value of the ninja -C command
 meson_build_sd() {
-    if [ ! -f ${1}/build.ninja ] ; then
+    if [ ! -f ${1}/build.ninja ]; then
          meson $1 \
                 -D man=false \
                 -D translations=false \
                 -D mode=developer
     fi
-    echo $(pwd)
     ninja -C $1
     return $? 
 }
