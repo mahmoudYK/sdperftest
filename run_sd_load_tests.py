@@ -24,6 +24,12 @@ ROOT_UID = 0
 ROOT_GID = 0
 DEFAULT_NONROOT_USER_UID = 1000
 DEFAULT_NONROOT_USER_GID = 1000
+MICROSEC_TO_SEC = 1000000
+MILISEC_TO_SEC = 1000
+MIN_TO_SEC = 60
+HOUR_TO_SEC = 60 * 60
+FIG_WIDTH = 25
+FIG_HEIGHT = 15
 PYTHON_PATH = "/usr/bin/python"
 SERVICES_GENERATOR_SCRIPT = "generate_services.py"
 SYSTEMD_SYSTEM_PATH = "/run/systemd/system/"
@@ -149,15 +155,15 @@ def to_seconds(func):
             t_value = float(t_value.group(0))
             match t_unit.group(0):
                 case "us":
-                    load_time += t_value / 1000000
+                    load_time += t_value / MICROSEC_TO_SEC
                 case "ms":
-                    load_time += t_value / 1000
+                    load_time += t_value / MILISEC_TO_SEC
                 case "s":
                     load_time += t_value
                 case "min":
-                    load_time += t_value * 60
+                    load_time += t_value * MIN_TO_SEC
                 case "h":
-                    load_time += t_value * 60 * 60
+                    load_time += t_value * HOUR_TO_SEC
                 case _:
                     load_time = float(math.inf)
         return load_time
@@ -180,7 +186,7 @@ def parse_sd_test_cmd_result(result: subprocess.CompletedProcess) -> str:
 def plot(info: OutputArtifactsInfo) -> None:
     """plot units load time against the number of test services"""
     print("plotting ...")
-    fig = plt.figure(figsize=(25, 15))
+    fig = plt.figure(figsize=(FIG_WIDTH, FIG_HEIGHT))
     generator_types_str = "generator types: [" + " ".join(info.generator_types) + "]"
     if "dag" in info.generator_types:
         generator_types_str += f"\ndag edge probability = {info.dag_edge_probability}"
