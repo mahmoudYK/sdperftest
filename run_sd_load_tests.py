@@ -374,26 +374,33 @@ class Reporter:
             )
         print_line(length=120)
         print(
-            f"{'measure' : <20}{' ' : <40}{'absolute error' : <25}{'percentage error(%)' : <25}"
+            f"{'measure' : <20}\
+    {' ' : <45}\
+    {'absolute error' : <25}\
+    {'percentage error(%)' : <25}"
         )
         print_line(length=120)
         print(
-            f"{'max' : <20}{' ' : <40}\
+            f"{'max' : <20}\
+    {' ' : <45}\
     {self.error_stats.max_abs : <25}\
     {self.error_stats.max_percent : <25}"
         )
         print(
-            f"{'min' : <20}{' ' : <40}\
+            f"{'min' : <20}\
+    {' ' : <45}\
     {self.error_stats.min_abs : <25}\
     {self.error_stats.min_percent : <25}"
         )
         print(
-            f"{'mean' : <20}{' ' : <40}\
+            f"{'mean' : <20}\
+    {' ' : <45}\
     {self.error_stats.mean_abs : <25}\
     {self.error_stats.mean_percent : <25}"
         )
         print(
-            f"{'stddev' : <20}{' ' : <40}\
+            f"{'stddev' : <20}\
+    {' ' : <45}\
     {self.error_stats.stddev_abs : <25}\
     {self.error_stats.stddev_percent : <25}"
         )
