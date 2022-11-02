@@ -98,14 +98,14 @@ def disable_test_services(service_template_prefix: str) -> int:
     return disabled_services_counter
 
 
-def remove_test_services(path:str, service_template_prefix: str) -> None:
+def remove_test_services(path: str, service_template_prefix: str) -> None:
     """remove all test services which match a certain template prefix"""
     service_suffix = "*.service"
-    files_to_remove = glob.glob(path+service_template_prefix+service_suffix)
+    files_to_remove = glob.glob(path + service_template_prefix + service_suffix)
     if files_to_remove:
         for file_name in files_to_remove:
             os.remove(file_name)
-        
+
 
 def write_service_file(path: str, service_text: str) -> None:
     """write service text to a .service file at path"""
@@ -114,6 +114,7 @@ def write_service_file(path: str, service_text: str) -> None:
             service_writer.write(service_text)
         except OSError:
             fail(f"Can't write service{path}")
+
 
 def print_time_from_microseconds(time_var: str, val: int) -> None:
     """write property = val (m|s|ms|us) to console"""
@@ -131,7 +132,8 @@ def print_time_from_microseconds(time_var: str, val: int) -> None:
 
 
 def to_namespace(func):
-    '''decorator to convert a dict to namespace object'''
+    """decorator to convert a dict to namespace object"""
+
     def wrapper(*args, **kwargs):
         return types.SimpleNamespace(**func(*args, **kwargs))
 
@@ -210,7 +212,7 @@ def analyze_time() -> None:
 
 
 class ServiceGeneratorInterface(abc.ABC):
-    '''abstract service generator class, defines a set of must implement methods'''
+    """abstract service generator class, defines a set of must implement methods"""
 
     @abc.abstractmethod
     def get_test_service_prefix(self) -> str:
@@ -223,6 +225,7 @@ class ServiceGeneratorInterface(abc.ABC):
     @abc.abstractmethod
     def __str__(self) -> str:
         """return the generator type as a string"""
+
 
 class ParallelServices(ServiceGeneratorInterface):
     """generator of services that doesn't have any dependencies between each other"""
@@ -366,7 +369,6 @@ class DAGServices(ServiceGeneratorInterface):
         parallel_service_template = self.create_dag_services_template(
             DefaultTemplate().template, True
         )
-
         # enumerate a directed acyclic graph (DAG)
         edges = itertools.permutations(range(num_of_services), 2)
         previous_service = -1
@@ -379,36 +381,43 @@ class DAGServices(ServiceGeneratorInterface):
                 first_node = edge[0]
                 second_node = edge[1]
 
+                # each node represents a service even if it has an outdegree of 0.
+                # if the node has an outdegree > 0, the service file wil be overwritten,
+                # if not, it will be generated as a parallel service.
                 if first_node - previous_service == 1:
                     write_service_file(
                         path + test_file_name.format(first_node),
-                        ParallelServices().gen_service_text(parallel_service_template, first_node),
+                        ParallelServices().gen_service_text(
+                            parallel_service_template, first_node
+                        ),
                     )
                     enable_service(manager, test_file_name.format(first_node))
                     previous_service = first_node
 
-                if (
-                    random.random() < self.edge_probability and first_node < second_node
-                ) or (
-                    first_node == last_service_num
-                ):  # (first_node < second_node) to make sure that the graph is acyclic
-                    if current_service_with_edges != first_node and edge_list:
-                        write_service_file(
-                            path + test_file_name.format(current_service_with_edges),
-                            self.gen_service_text(
-                                service_template, test_file_name, edge_list
-                            ),
-                        )
-                        enable_service(
-                            manager, test_file_name.format(current_service_with_edges)
-                        )
-                        edge_list.clear()
+                # edge list is full and a new node number is started, flush
+                # the edge list to the previous node number service dependency list.
+                if current_service_with_edges != first_node and edge_list:
+                    write_service_file(
+                        path + test_file_name.format(current_service_with_edges),
+                        self.gen_service_text(
+                            service_template, test_file_name, edge_list
+                        ),
+                    )
+                    enable_service(
+                        manager, test_file_name.format(current_service_with_edges)
+                    )
+                    edge_list.clear()
 
-                    if first_node != last_service_num:
-                        edge_list.append(edge)
-                        current_service_with_edges = first_node
-                    else:
-                        break
+                # (first_node < second_node) to make sure that the graph is acyclic
+                if random.random() < self.edge_probability and first_node < second_node:
+                    edge_list.append(edge)
+                    current_service_with_edges = first_node
+
+                # no need to process the rest of permutations if first node in the edge
+                # is the last node, because all node numbers < the last node number.
+                # it will be generated as a parallel service.
+                if first_node == last_service_num:
+                    break
 
         return num_of_services
 
@@ -463,7 +472,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    '''main'''
+    """main"""
     if os.geteuid() != 0:
         fail("please run the script as root")
 
@@ -498,7 +507,9 @@ def main() -> None:
                     services_count = disable_test_services(
                         obj.get_test_service_prefix()
                     )
-                    remove_test_services(SYSTEMD_SYSTEM_PATH, obj.get_test_service_prefix())
+                    remove_test_services(
+                        SYSTEMD_SYSTEM_PATH, obj.get_test_service_prefix()
+                    )
                     print(
                         f"disabled and removed {services_count} services of type {str(obj)}"
                     )
