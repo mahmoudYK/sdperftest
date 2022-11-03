@@ -11,7 +11,8 @@ so, it doesn't depend on any services.
 amount of possible edges (dependencies) between services.
 
 ## Packages need to be installed:
-pystemd: https://github.com/facebookincubator/pystemd 
+pystemd: https://github.com/facebookincubator/pystemd
+graphviz: https://pypi.org/project/graphviz/ 
 
 ## Options:
 -  -h, --help  
@@ -28,11 +29,17 @@ pystemd: https://github.com/facebookincubator/pystemd
                         edge probability for DAG services generator (default: 0.1).
 -  -a, --analyze  
                         analyze systemd boot time.
+-  -z, --gen_graphviz_dot  
+                        generate graphviz dot file
+-  -d DOT_DIR, --dot_dir DOT_DIR  
+                        graphviz dot file output directory
+
 
 ## Examples:
-Generate and enable 1000 services of type DAG with edge probabilty 0.01:
+Generate and enable 1000 services of type DAG with edge probabilty 0.01,
+also generate graphviz dot source file and save it to dot_dir directory:
 ```sh
-$ sudo python3 generate_services.py  -t dag -p 0.01 -n 1000 -g
+$ sudo python3 generate_services.py  -t dag -p 0.01 -n 1000 -g -z -d dot_dir
 ```
 (-g an be omitted)
 
@@ -66,10 +73,18 @@ and a plot is generated for the data collected from 2 different systemd binaries
 matplotlib: https://matplotlib.org/stable/users/installing/index.html
 
 ## Options:
--  -h, --help  
+-h, --help  
                         show this help message and exit
--  -d SYSTEMD_BIN_PATH, --systemd_bin_path SYSTEMD_BIN_PATH  
-                        list of systemd bin directories
+-  -m SD_PATH_MODE, --sd_path_mode SD_PATH_MODE  
+                        use 2 systemd executable paths or 2 systemd upstream commit hashes [exe,commit]
+-  -e SD_REF_EXE_PATH, --sd_ref_exe_path SD_REF_EXE_PATH  
+                        reference systemd executable path
+-  -f SD_COMP_EXE_PATH, --sd_comp_exe_path SD_COMP_EXE_PATH  
+                        compared systemd executable path
+-  -c SD_COMMIT_REF, --sd_commit_ref SD_COMMIT_REF  
+                        commit hash of the reference systemd repo
+-  -d SD_COMMIT_COMP, --sd_commit_comp SD_COMMIT_COMP  
+                        commit hash of the compared systemd repo
 -  -t GEN_TYPES, --gen_types GEN_TYPES  
                         type of generated test services [parallel,single_path,dag]
 -  -p DAG_EDGE_PROBABILITY, --dag_edge_probability DAG_EDGE_PROBABILITY  
@@ -88,13 +103,37 @@ matplotlib: https://matplotlib.org/stable/users/installing/index.html
                         name of output json data and jpeg plot files
 -  -r OUTPUT_FILES_DIR, --output_files_dir OUTPUT_FILES_DIR  
                         output artifacts dir
+-  -z, --gen_graphviz_dot  
+                        generate graphviz dot file
+
 
 ## Examples:
 Generate this sequence of 'dag' services numbers (with edge probability=0.2): [500 1000 1500 2000 2500].
 Use EUID and EGID of 1000 to run 'systemd --test --system --no-pager' command for each number of 
 generated services. The output files should be named results.json and results.jpg.
 ```sh
-$ sudo python3 run_tests.py -t dag -p .2 -s 500 -j 500 -n 5 -d $SD_BIN_PATH1/systemd -d $SD_BIN_PATH2/systemd -o results -r $OUTPUT_DIR -u 1000 -g 1000
+$ sudo python3 run_tests.py -t dag -p .2 -s 500 -j 500 -n 5 -m exe -e $SD_BIN_PATH1/systemd -f $SD_BIN_PATH2/systemd -o results -r $OUTPUT_DIR -u 1000 -g 1000
+```
+Generate the same sequence of services as in the previous example, however use systemd git commit hashes instead of executable paths, 
+and generate graphviz dot files, save the dot files at $OUTPUT_DIR 
+```sh
+$ sudo python3 run_tests.py -t dag -p .2 -s 500 -j 500 -n 5 -m commit -c $SD_COMMIT_HASH1 -d $SD_COMMIT_HASH2 -o results -r $OUTPUT_DIR -u 1000 -g 1000 -z
+```
+
+## build_sd.sh
+
+Clone & build systemd using a specific git commit hash from systemd github repo: https://github.com/systemd/systemd
+
+## Options:
+-  -h  
+                    print usage and exit
+-  -d  
+                    systemd build dir
+-  -c  
+                    systemd git commit hash
+## Examples:
+```sh
+$ ./build_sd.sh -d $SD_BUILD_DIR -c $SD_COMMIT_HASH
 ```
 
 ## License:
