@@ -71,9 +71,11 @@ def print_line(num_of_lines: int = 1, length: int = 100, char: str = "-") -> Non
 
 def assemble_service_gen_cmd(
     types: list,
-    remove: bool,
+    remove: bool = False,
     services_num: int = None,
     dag_edge_probability: float = None,
+    gen_dot: bool = False,
+    dot_dir: str = DEFAULT_OUTPUT_ARTIFACTS_DIR,
 ) -> list:
     """assemble the generate_services.py arguments"""
     cmd = [PYTHON_PATH, SERVICES_GENERATOR_SCRIPT]
@@ -89,6 +91,11 @@ def assemble_service_gen_cmd(
         if dag_edge_probability:
             cmd.append("-p")
             cmd.append(str(dag_edge_probability))
+        if gen_dot:
+            cmd.append("-z")
+            cmd.append("-d")
+            cmd.append(dot_dir)
+
     return cmd
 
 
@@ -331,6 +338,24 @@ class Reporter:
         if "dag" in self.generator_types:
             json_str_dict["dag edge probability"] = self.dag_edge_probability
         json_str_dict["rmse"] = round(self.rmse, 4)
+        json_str_dict["absolute error"] = dict(
+            zip(self.generated_services_num_list, self.error_stats.abs_error)
+        )
+        json_str_dict["percentage error"] = dict(
+            zip(self.generated_services_num_list, self.error_stats.percent_error)
+        )
+        json_str_dict["absolute error stats"] = {
+            "max_abs": self.error_stats.max_abs,
+            "min_abs": self.error_stats.min_abs,
+            "mean_abs": self.error_stats.mean_abs,
+            "stddev_abs": self.error_stats.stddev_abs,
+        }
+        json_str_dict["percent error stats"] = {
+            "max_percent": self.error_stats.max_percent,
+            "min_percent": self.error_stats.min_percent,
+            "mean_percent": self.error_stats.mean_percent,
+            "stddev_percent": self.error_stats.stddev_percent,
+        }
         json_file_path = os.path.join(
             self.output_files_dir, self.output_files_name + ".json"
         )
@@ -442,9 +467,11 @@ def run_tests(args: argparse.Namespace) -> None:
     for services_num in services_num_list:
         services_gen_cmd = assemble_service_gen_cmd(
             args.gen_types,
-            False,
-            services_num,
-            args.dag_edge_probability,
+            remove=False,
+            services_num=services_num,
+            dag_edge_probability=args.dag_edge_probability,
+            gen_dot=args.gen_graphviz_dot,
+            dot_dir=args.output_files_dir,
         )
         run_cmd(services_gen_cmd, ROOT_UID, ROOT_GID)
         for sd_exe_path in sd_exe_paths:
@@ -584,6 +611,13 @@ def parse_args() -> argparse.Namespace:
         "-d",
         "--sd_commit_comp",
         help="commit hash of the compared systemd repo",
+    )
+
+    parser.add_argument(
+        "-z",
+        "--gen_graphviz_dot",
+        action="store_true",
+        help="generate graphviz dot file",
     )
 
     return parser.parse_args()
