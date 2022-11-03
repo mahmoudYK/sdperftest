@@ -4,7 +4,6 @@
 import re
 import os
 import sys
-import subprocess
 import argparse
 import itertools
 import random
@@ -14,6 +13,7 @@ import types
 import functools
 import abc
 import glob
+import graphviz
 
 # https://github.com/facebookincubator/pystemd
 import pystemd.systemd1
@@ -24,6 +24,7 @@ SYSTEMD_SYSTEM_PATH = "/run/systemd/system/"
 DEFAULT_NUM_OF_SERVICES = 500
 DEFAULT_EDGE_PROBABILITY = 0.1
 RANDOM_SEED = 2
+DEFAULT_GRAPHVIZ_DOT_OUTPUT_DIR = os.getcwd()
 
 random.seed(RANDOM_SEED)
 
@@ -211,12 +212,51 @@ def analyze_time() -> None:
     )
 
 
+def gen_dot_file(
+    node_list: list,
+    edge_list: list,
+    digraph_name: str,
+    digraph_comment: str,
+    digraph_filename: str,
+    digraph_dir: str,
+    node_label_template: str,
+) -> None:
+    '''generate graphviz dot file'''
+    dot = graphviz.Digraph(
+        name=digraph_name,
+        comment=digraph_comment,
+        filename=digraph_filename,
+    )
+    for node in node_list:
+        dot.node(str(node), node_label_template + f"{node}.service")
+    for edge in edge_list:
+        dot.edge(str(edge[0]), str(edge[1]))
+    dot.save(filename=digraph_filename, directory=digraph_dir)
+
+
 class ServiceGeneratorInterface(abc.ABC):
     """abstract service generator class, defines a set of must implement methods"""
 
-    @abc.abstractmethod
-    def get_test_service_prefix(self) -> str:
+    def __init__(self, test_file_prefix: str, node_list: list, edge_list: list) -> None:
+        self._test_file_prefix = test_file_prefix
+        self._node_list = node_list
+        self._edge_list = edge_list
+        super().__init__()
+
+    @property
+    def test_service_prefix(self) -> str:
         """return unique test file name per generator class"""
+        return self._test_file_prefix
+
+    @property
+    def nodes(self) -> list:
+        """return the list of all the nodes(service numbers)"""
+        return self._node_list
+
+    @property
+    def edges(self) -> list:
+        """return the list of all the edges(dependencies bwn services)"""
+        return self._edge_list
 
     @abc.abstractmethod
     def gen_test_services(self, path: str, num_of_services: int) -> int:
@@ -230,8 +270,12 @@ class ServiceGeneratorInterface(abc.ABC):
 class ParallelServices(ServiceGeneratorInterface):
     """generator of services that doesn't have any dependencies between each other"""
 
-    def __init__(self) -> None:
-        self.test_file_prefix = "test_parallel"
+    def __init__(self, gen_dot: bool = False) -> None:
+        self._gen_dot = gen_dot
+        self._test_file_prefix = "test_parallel"
+        self._node_list = []
+        self._edge_list = []
+        super().__init__(self._test_file_prefix, self._node_list, self._edge_list)
 
     def create_parallel_services_template(self, properties: dict) -> str:
         """generate parallel service template string"""
@@ -242,14 +286,10 @@ class ParallelServices(ServiceGeneratorInterface):
         """generate parallel service text"""
         return template.format(service_num)
 
-    def get_test_service_prefix(self) -> str:
-        """return the string: test_parallel"""
-        return self.test_file_prefix
-
     def gen_test_services(self, path: str, num_of_services: int) -> int:
         """write the test service text to num_of_services service files"""
 
-        test_file_name = self.test_file_prefix + "{0}.service"
+        test_file_name = self._test_file_prefix + "{0}.service"
         service_template = self.create_parallel_services_template(
             DefaultTemplate().template
         )
@@ -261,6 +301,8 @@ class ParallelServices(ServiceGeneratorInterface):
                     self.gen_service_text(service_template, i),
                 )
                 enable_service(manager, test_file_name.format(i))
+                if self._gen_dot:
+                    self._node_list.append(i)
 
         return num_of_services
 
@@ -272,8 +314,12 @@ class ParallelServices(ServiceGeneratorInterface):
 class SinglePathServices(ServiceGeneratorInterface):
     """generator of services with only 1 After dependency on the previous test service"""
 
-    def __init__(self) -> None:
-        self.test_file_prefix = "test_single_path"
+    def __init__(self, gen_dot: bool = False) -> None:
+        self._gen_dot = gen_dot
+        self._test_file_prefix = "test_single_path"
+        self._node_list = []
+        self._edge_list = []
+        super().__init__(self._test_file_prefix, self._node_list, self._edge_list)
 
     def create_single_path_services_template(
         self, properties: dict, first_service: bool
@@ -293,14 +339,10 @@ class SinglePathServices(ServiceGeneratorInterface):
             return template.format(service_num)
         return template.format(service_num, prev_service_num)
 
-    def get_test_service_prefix(self) -> str:
-        """return the string: test_single_path"""
-        return self.test_file_prefix
-
     def gen_test_services(self, path: str, num_of_services: int) -> int:
         """write the test service text to num_of_services service files"""
 
-        test_file_name = self.test_file_prefix + "{0}.service"
+        test_file_name = self._test_file_prefix + "{0}.service"
         service_template = self.create_single_path_services_template(
             DefaultTemplate().template, False
         )
@@ -317,6 +359,10 @@ class SinglePathServices(ServiceGeneratorInterface):
                     ),
                 )
                 enable_service(manager, test_file_name.format(i))
+                if self._gen_dot:
+                    self._node_list.append(i)
+                    if i > 0:
+                        self._edge_list.append((i - 1, i))
 
         return num_of_services
 
@@ -328,9 +374,13 @@ class SinglePathServices(ServiceGeneratorInterface):
 class DAGServices(ServiceGeneratorInterface):
     """generator of DAG services that may have many or no dependencies between each other"""
 
-    def __init__(self, edge_probability_arg: float) -> None:
-        self.test_file_prefix = "test_DAG"
-        self.edge_probability = edge_probability_arg
+    def __init__(self, edge_probability_arg: float, gen_dot: bool = False) -> None:
+        self._edge_probability = edge_probability_arg
+        self._gen_dot = gen_dot
+        self._test_file_prefix = "test_DAG"
+        self._node_list = []
+        self._edge_list = []
+        super().__init__(self._test_file_prefix, self._node_list, self._edge_list)
 
     def create_dag_services_template(self, properties: dict, parallel: bool) -> str:
         """generate DAG service template string"""
@@ -356,13 +406,9 @@ class DAGServices(ServiceGeneratorInterface):
                     )  # space separated list of services
         return template.format(service_num, before_service_names)
 
-    def get_test_service_prefix(self) -> str:
-        """return the string: test_DAG"""
-        return self.test_file_prefix
-
     def gen_test_services(self, path: str, num_of_services: int) -> int:
         """write the test service text to num_of_services service files"""
-        test_file_name = self.test_file_prefix + "{0}.service"
+        test_file_name = self._test_file_prefix + "{0}.service"
         service_template = self.create_dag_services_template(
             DefaultTemplate().template, False
         )
@@ -393,6 +439,8 @@ class DAGServices(ServiceGeneratorInterface):
                     )
                     enable_service(manager, test_file_name.format(first_node))
                     previous_service = first_node
+                    if self._gen_dot:
+                        self._node_list.append(first_node)
 
                 # edge list is full and a new node number is started, flush
                 # the edge list to the previous node number service dependency list.
@@ -409,9 +457,14 @@ class DAGServices(ServiceGeneratorInterface):
                     edge_list.clear()
 
                 # (first_node < second_node) to make sure that the graph is acyclic
-                if random.random() < self.edge_probability and first_node < second_node:
+                if (
+                    random.random() < self._edge_probability
+                    and first_node < second_node
+                ):
                     edge_list.append(edge)
                     current_service_with_edges = first_node
+                    if self._gen_dot:
+                        self._edge_list.append((first_node, second_node))
 
                 # no need to process the rest of permutations if first node in the edge
                 # is the last node, because all node numbers < the last node number.
@@ -467,7 +520,18 @@ def parse_args() -> argparse.Namespace:
         help="analyze systemd boot time",
         action="store_true",
     )
-
+    parser.add_argument(
+        "-z",
+        "--gen_graphviz_dot",
+        action="store_true",
+        help="generate graphviz dot file",
+    )
+    parser.add_argument(
+        "-d",
+        "--dot_dir",
+        default=DEFAULT_GRAPHVIZ_DOT_OUTPUT_DIR,
+        help="graphviz dot file output directory",
+    )
     return parser.parse_args()
 
 
@@ -483,9 +547,9 @@ def main() -> None:
 
     if args.type:
         generator_types = [
-            SinglePathServices(),
-            ParallelServices(),
-            DAGServices(args.edge_probability),
+            SinglePathServices(args.gen_graphviz_dot),
+            ParallelServices(args.gen_graphviz_dot),
+            DAGServices(args.edge_probability, args.gen_graphviz_dot),
         ]
         generator_types_str = [str(x) for x in generator_types]
         # if numbr of -n less than number of -t, use the last -n by default
@@ -504,12 +568,8 @@ def main() -> None:
                     fail("can't set generate and remove together")
 
                 elif args.remove:
-                    services_count = disable_test_services(
-                        obj.get_test_service_prefix()
-                    )
-                    remove_test_services(
-                        SYSTEMD_SYSTEM_PATH, obj.get_test_service_prefix()
-                    )
+                    services_count = disable_test_services(obj.test_service_prefix)
+                    remove_test_services(SYSTEMD_SYSTEM_PATH, obj.test_service_prefix)
                     print(
                         f"disabled and removed {services_count} services of type {str(obj)}"
                     )
@@ -523,6 +583,17 @@ def main() -> None:
                     print(
                         f"generated and enabled {services_count} test services of type {str(obj)}"
                     )
+
+                    if args.gen_graphviz_dot:
+                        gen_dot_file(
+                            obj.nodes,
+                            obj.edges,
+                            str(obj),
+                            obj.test_service_prefix + " digraph",
+                            obj.test_service_prefix + f"_{services_count}_services.dot",
+                            args.dot_dir,
+                            obj.test_service_prefix,
+                        )
 
     if args.analyze:
         analyze_time()
