@@ -532,6 +532,17 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "-c",
+        "--sd_commit_ref",
+        help="commit hash of the reference systemd repo",
+    )
+
+    parser.add_argument(
+        "-d",
+        "--sd_commit_comp",
+        help="commit hash of the compared systemd repo",
+    )
+    parser.add_argument(
         "-t",
         "--gen_types",
         action="append",
@@ -599,18 +610,6 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default=DEFAULT_OUTPUT_ARTIFACTS_DIR,
         help="output artifacts dir",
-    )
-
-    parser.add_argument(
-        "-c",
-        "--sd_commit_ref",
-        help="commit hash of the reference systemd repo",
-    )
-
-    parser.add_argument(
-        "-d",
-        "--sd_commit_comp",
-        help="commit hash of the compared systemd repo",
     )
 
     parser.add_argument(
