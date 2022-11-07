@@ -427,7 +427,8 @@ class DAGServices(ServiceGeneratorInterface):
                 first_node = edge[0]
                 second_node = edge[1]
 
-                # each node represents a service even if it has an outdegree of 0.
+                # each node represents a service and it should be written to 
+                # SYSTEMD_SYSTEM_PATH even if it has an outdegree of 0.
                 # if the node has an outdegree > 0, the service file wil be overwritten,
                 # if not, it will be generated as a parallel service.
                 if first_node - previous_service == 1:
@@ -442,8 +443,9 @@ class DAGServices(ServiceGeneratorInterface):
                     if self._gen_dot:
                         self._node_list.append(first_node)
 
-                # edge list is full and a new node number is started, flush
-                # the edge list to the previous node number service dependency list.
+                # edge_list is full and a new node number is started, write
+                # the edge_list to the previous node number service dependency list,
+                # and clear the edge_list to be used for the current new node.
                 if current_service_with_edges != first_node and edge_list:
                     write_service_file(
                         path + test_file_name.format(current_service_with_edges),
@@ -456,7 +458,7 @@ class DAGServices(ServiceGeneratorInterface):
                     )
                     edge_list.clear()
 
-                # (first_node < second_node) to make sure that the graph is acyclic
+                # (first_node < second_node) to make sure that the graph is directed acyclic graph
                 if (
                     random.random() < self._edge_probability
                     and first_node < second_node
@@ -468,7 +470,7 @@ class DAGServices(ServiceGeneratorInterface):
 
                 # no need to process the rest of permutations if first node in the edge
                 # is the last node, because all node numbers < the last node number.
-                # it will be generated as a parallel service.
+                # the last node number has been generated as a parallel service already.
                 if first_node == last_service_num:
                     break
 
