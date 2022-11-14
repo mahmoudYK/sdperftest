@@ -15,7 +15,6 @@ Options:
 	-d  systemd build dir
 	-c  systemd git commit hash
 Example:
-    build_sd.sh -h
     build_sd.sh -d <systemd build dir> -c <commit hash>
 *********************************************************
 EOF
@@ -27,7 +26,7 @@ EOF
 # $1: failure msg 
 fail() {
     echo "exit 1, $1"
-    cd $INITIAL_WD
+    cd "$INITIAL_WD" || exit $EXIT_ERROR
     exit $EXIT_ERROR
 }
 
@@ -72,7 +71,7 @@ MESON_BULD_DIR=build
 # $2: directory  
 clone_git_repo() {
     echo "clone : $1"
-    git clone $1 $2
+    git clone "$1" "$2"
 }
 
 
@@ -82,7 +81,7 @@ clone_git_repo() {
 # $1: commit hash 
 checkout_commit_hash() {
     echo "checkout commit hash: $1"
-    git checkout $1
+    git checkout "$1"
 }
 
 
@@ -90,28 +89,28 @@ checkout_commit_hash() {
 # args:
 # $1: meson build directory
 meson_build_sd() {
-    if [ ! -f ${1}/build.ninja ]; then
-         meson $1 \
+    if [ ! -f "${1}"/build.ninja ]; then
+         meson "$1" \
                 -D man=false \
                 -D translations=false \
                 -D mode=developer
     fi
-    ninja -C $1
+    ninja -C "$1"
 }
 
    
-if [ -x  ${SYSTEMD_SOURCE_PATH}/build/systemd ]; then
+if [ -x  "${SYSTEMD_SOURCE_PATH}"/build/systemd ]; then
     echo "systemd executbale is already existing, no need to build"
     exit $EXIT_SUCCESS
 
-elif [ ! -d  ${SYSTEMD_SOURCE_PATH} ]; then
-    mkdir -p  ${SYSTEMD_SOURCE_PATH}
+elif [ ! -d  "${SYSTEMD_SOURCE_PATH}" ]; then
+    mkdir -p  "${SYSTEMD_SOURCE_PATH}"
 
 else
     echo "${SYSTEMD_SOURCE_PATH} is already existing!"     
 fi
 
-cd  ${SYSTEMD_SOURCE_PATH}
+cd  "$SYSTEMD_SOURCE_PATH" || fail "cd to $SYSTEMD_SOURCE_PATH failed"
 
 # check if $SYSTEMD_SOURCE_PATH is empty,
 # if it is empty, then clone from $SYSTEMD_GIT_REPO,
@@ -119,13 +118,13 @@ cd  ${SYSTEMD_SOURCE_PATH}
 # if it is not empty then assume that systemd repo is ok!
 # and start the meson build process. 
 if [ -z "$(ls -A)" ]; then   
-    ! clone_git_repo ${SYSTEMD_GIT_REPO} . && fail "clonning ${SYSTEMD_GIT_REPO} failed!"   
-    ! checkout_commit_hash ${COMMIT_HASH} && fail "checking out ${COMMIT_HASH} failed!"       
+    clone_git_repo "${SYSTEMD_GIT_REPO}" . || fail "clonning ${SYSTEMD_GIT_REPO} failed!"   
+    checkout_commit_hash "${COMMIT_HASH}" || fail "checking out ${COMMIT_HASH} failed!"       
 fi
 
 meson_build_sd ${MESON_BULD_DIR}
 ret=$?
 
-cd $INITIAL_WD
+cd "$INITIAL_WD" || fail "cd to $INITIAL_WD failed"
 
 exit $ret
