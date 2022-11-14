@@ -30,6 +30,7 @@ HOUR_TO_SEC = 60 * 60
 FIG_WIDTH = 25
 FIG_HEIGHT = 15
 PYTHON_PATH = "/usr/bin/python"
+TIME_CMD_PATH = "/usr/bin/time"
 SERVICES_GENERATOR_SCRIPT = "generate_services.py"
 SYSTEMD_SYSTEM_PATH = "/run/systemd/system/"
 DEFAULT_OUTPUT_ARTIFACTS_FILE_NAME = "sd_load_test"
@@ -100,19 +101,24 @@ def assemble_service_gen_cmd(
 
 
 def run_cmd(
-    cmd: list, uid: int, gid: int, capture: bool = False
+    cmd: list, uid: int, gid: int, stdout_file=None, stderr_file=None
 ) -> subprocess.CompletedProcess:
     """using subprocess to run a command and return subprocess.CompletedProcess"""
     cmd_str = " ".join(cmd)
     print(f"running: {cmd_str}")
+
     try:
-        if capture:
-            return subprocess.run(
-                cmd, check=True, capture_output=True, text=True, user=uid, group=gid
-            )
-        return subprocess.run(cmd, check=True, user=uid, group=gid)
-    except subprocess.CalledProcessError as ex:
-        fail(f"running {cmd_str} failed, returncode: {ex.returncode}")
+        return subprocess.run(
+            cmd,
+            check=True,
+            stdout=stdout_file,
+            stderr=stderr_file,
+            text=True,
+            user=uid,
+            group=gid,
+        )
+    except Exception as ex:
+        fail(f"running {cmd_str} failed:\n{ex}")
 
 
 def parse_sd_path_mode(args: argparse.Namespace) -> list:
@@ -126,7 +132,7 @@ def parse_sd_path_mode(args: argparse.Namespace) -> list:
             os.chmod(SD_BUILD_SCRIPT, 0o755)
             for commit_hash in commit_hash_list:
                 sd_build_cmd = [SD_BUILD_SCRIPT, "-d", SD_BUILD_DIR, "-c", commit_hash]
-                run_cmd(sd_build_cmd, args.user_uid, args.user_gid, capture=False)
+                run_cmd(sd_build_cmd, args.user_uid, args.user_gid)
                 # exe path example:
                 # sd_build_load_test/6fadf01cf3cdd98f78b7829f4c6c892306958394/systemd/build/systemd
                 sd_exe_path_list.append(
@@ -174,8 +180,14 @@ def parse_sd_test_cmd_result(result: subprocess.CompletedProcess) -> str:
     """parse systemd --test stderr to extract units load time in seconds"""
     units_load_time_line = "Loaded units and determined initial transaction in"
     units_load_time = re.match(
-        r"\d.*\.$", result.stderr.split(units_load_time_line)[1].strip()
+        r"\d.+[.]$",
+        str(result.stderr).split(units_load_time_line)[1].split("\n")[0].strip(),
     )
+    time_cmd_output = re.findall(
+        "^(?:real|user|sys)\s\d+.+$", str(result.stderr), re.MULTILINE
+    )
+    if time_cmd_output:
+        [print(time_type + " s") for time_type in time_cmd_output]
     if units_load_time:
         return units_load_time.group(0).removesuffix(".")
     fail("can't parse the stderr output of the cmd: systemd --test.")
@@ -476,6 +488,8 @@ def run_tests(args: argparse.Namespace) -> None:
         run_cmd(services_gen_cmd, ROOT_UID, ROOT_GID)
         for sd_exe_path in sd_exe_paths:
             sd_test_cmd = [
+                TIME_CMD_PATH,
+                "-p",
                 sd_exe_path,
                 "--test",
                 "--system",
@@ -483,7 +497,13 @@ def run_tests(args: argparse.Namespace) -> None:
                 "multi-user.target",
                 "--no-pager",
             ]
-            result = run_cmd(sd_test_cmd, args.user_uid, args.user_gid, capture=True)
+            result = run_cmd(
+                sd_test_cmd,
+                args.user_uid,
+                args.user_gid,
+                stdout_file=subprocess.DEVNULL,
+                stderr_file=subprocess.PIPE,
+            )
             units_load_time_in_sec = parse_sd_test_cmd_result(result)
             print(f"units load time in seconds = {units_load_time_in_sec} s")
             results_dict[sd_exe_path].append(units_load_time_in_sec)
