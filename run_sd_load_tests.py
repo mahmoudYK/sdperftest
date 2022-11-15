@@ -12,6 +12,9 @@ import collections
 import math
 import json
 import dataclasses
+import stat
+import time
+import shutil
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
@@ -29,8 +32,12 @@ MIN_TO_SEC = 60
 HOUR_TO_SEC = 60 * 60
 FIG_WIDTH = 25
 FIG_HEIGHT = 15
+DEFAULT_PERF_FREQUENCY = "max"
+DEFAULT_PERF_SLEEP_PERIOD = 5  # 5 seconds
+PERF_OUTPUT_DATA_FILE = "perf.data"
 PYTHON_PATH = "/usr/bin/python"
 TIME_CMD_PATH = "/usr/bin/time"
+PERF_CMD_PATH = "/usr/bin/perf"
 SERVICES_GENERATOR_SCRIPT = "generate_services.py"
 SYSTEMD_SYSTEM_PATH = "/run/systemd/system/"
 DEFAULT_OUTPUT_ARTIFACTS_FILE_NAME = "sd_load_test"
@@ -70,6 +77,14 @@ def print_line(num_of_lines: int = 1, length: int = 100, char: str = "-") -> Non
         )
 
 
+def is_installed(program_name: str) -> bool:
+    '''check if a program is installed'''
+    installed = shutil.which(program_name) is not None
+    if not installed:
+        print(f"{program_name} is not installed!")
+    return installed
+
+
 def assemble_service_gen_cmd(
     types: list,
     remove: bool = False,
@@ -101,22 +116,37 @@ def assemble_service_gen_cmd(
 
 
 def run_cmd(
-    cmd: list, uid: int, gid: int, stdout_file=None, stderr_file=None
-) -> subprocess.CompletedProcess:
+    cmd: list,
+    uid: int,
+    gid: int,
+    stdout_file=None,
+    stderr_file=None,
+    non_blocking: bool = False,
+) -> subprocess.CompletedProcess | subprocess.Popen:
     """using subprocess to run a command and return subprocess.CompletedProcess"""
     cmd_str = " ".join(cmd)
     print(f"running: {cmd_str}")
 
     try:
-        return subprocess.run(
-            cmd,
-            check=True,
-            stdout=stdout_file,
-            stderr=stderr_file,
-            text=True,
-            user=uid,
-            group=gid,
-        )
+        if non_blocking:
+            return subprocess.Popen(
+                cmd,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                text=True,
+                user=uid,
+                group=gid,
+            )
+        else:
+            return subprocess.run(
+                cmd,
+                check=True,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                text=True,
+                user=uid,
+                group=gid,
+            )
     except Exception as ex:
         fail(f"running {cmd_str} failed:\n{ex}")
 
@@ -184,10 +214,10 @@ def parse_sd_test_cmd_result(result: subprocess.CompletedProcess) -> str:
         str(result.stderr).split(units_load_time_line)[1].split("\n")[0].strip(),
     )
     time_cmd_output = re.findall(
-        "^(?:real|user|sys)\s\d+.+$", str(result.stderr), re.MULTILINE
+        r"^(?:real|user|sys)\s\d+[.]\d+$", str(result.stderr), re.MULTILINE
     )
     if time_cmd_output:
-        [print(time_type + " s") for time_type in time_cmd_output]
+        [print(f"{time_type} s") for time_type in time_cmd_output]
     if units_load_time:
         return units_load_time.group(0).removesuffix(".")
     fail("can't parse the stderr output of the cmd: systemd --test.")
@@ -452,6 +482,116 @@ class Reporter:
         print_line(char="#")
 
 
+class PerfController:
+    """linux perf tool prfiling data recorder and flamegraph generator"""
+
+    def __init__(self) -> None:
+        self.ctl_dir = "/tmp/"
+        self.ctl_fifo = os.path.join(self.ctl_dir, "perf_ctl.fifo")
+        self.ctl_ack_fifo = os.path.join(self.ctl_dir, "perf_ctl_ack.fifo")
+        self.ctl_fifo_file = None
+        self.ctl_ack_fifo_file = None
+        self.perf_proc = None
+
+    def check_fifo_exists(self, path: str) -> bool:
+        """check if a named pipe exists"""
+        try:
+            return stat.S_ISFIFO(os.stat(path).st_mode)
+        except FileNotFoundError:
+            return False
+
+    def __create_fifos(self) -> None:
+        """create perf ctl and ack nemd pipes"""
+        if self.check_fifo_exists(self.ctl_fifo):
+            print(f"{self.ctl_fifo} exists, deleteing...")
+            os.unlink(self.ctl_fifo)
+        if self.check_fifo_exists(self.ctl_ack_fifo):
+            print(f"{self.ctl_ack_fifo} exists, deleteing...")
+            os.unlink(self.ctl_ack_fifo)
+        try:
+            os.mkfifo(self.ctl_fifo, 0o660)
+            os.mkfifo(self.ctl_ack_fifo, 0o660)
+        except OSError as ex:
+            fail(f"failed to open perf fifos: {ex}")
+
+    def __write_to_ctl_fifo(self, text: str) -> None:
+        """write data to the perf ctl named pipe"""
+        self.ctl_fifo_file.write(text)
+        self.ctl_fifo_file.flush()
+
+    def __read_ack(self) -> str:
+        """wait till perf writes ack to the ack named pipe"""
+        while self.ctl_ack_fifo_file.readline().strip() != "ack":
+            time.sleep(0.01)
+
+    def __check_perf_proc_alive(self) -> bool:
+        """check if perf process still running"""
+        return self.perf_proc.poll() is None
+
+    def run_perf_record(self, sampling_frequency: str, sleep_period: int) -> None:
+        """run perf record cmd and generate perf.data"""
+        self.__create_fifos()
+        perf_record_cmd = [
+            PERF_CMD_PATH,
+            "record",
+            "-a",
+            "-g",
+            "-D",
+            "-1",
+            "--control",
+            f"fifo:{self.ctl_fifo},{self.ctl_ack_fifo}",
+            "-F",
+            sampling_frequency,
+            "-e",
+            "cycles",
+            "--",
+            "sleep",
+            str(sleep_period),
+        ]
+        self.perf_proc = run_cmd(perf_record_cmd, ROOT_UID, ROOT_GID, non_blocking=True)
+        self.ctl_fifo_file = open(self.ctl_fifo, "w")
+        self.ctl_ack_fifo_file = open(self.ctl_ack_fifo, "r")
+        self.__write_to_ctl_fifo("enable\n")
+        self.__read_ack()
+
+    def stop_perf_record(self) -> None:
+        """stop perf process if it is still running, close and delete the named pipes"""
+        if self.__check_perf_proc_alive():
+            self.__write_to_ctl_fifo("stop\n")
+            while self.__check_perf_proc_alive():
+                time.sleep(0.01)
+        self.ctl_fifo_file.close()
+        self.ctl_ack_fifo_file.close()
+        os.unlink(self.ctl_fifo)
+        os.unlink(self.ctl_ack_fifo)
+
+    @classmethod
+    def gen_flamegraph(
+        cls, output_files_dir: str, output_files_name: str, services_num: int
+    ):
+        """generate a flamegraph using perf script flamegraph.py"""
+        if (
+            os.path.isfile(PERF_OUTPUT_DATA_FILE)
+            and os.stat(PERF_OUTPUT_DATA_FILE).st_size > 0
+        ):
+            perf_script_cmd = [
+                PERF_CMD_PATH,
+                "script",
+                "report",
+                "flamegraph",
+                "-o",
+                os.path.join(
+                    output_files_dir, output_files_name + str(services_num) + ".html"
+                ),
+            ]
+            run_cmd(perf_script_cmd, ROOT_UID, ROOT_GID)
+            os.remove(PERF_OUTPUT_DATA_FILE)
+        else:
+            print(
+                "perf.data file is missing or size = 0, may be increase perf sleep period [-S|--perf_sleep_period]"
+            )
+
+
 def remove_exisiting_test_services() -> None:
     """remove all test services"""
     print(f"removing existing test services at {SYSTEMD_SYSTEM_PATH}")
@@ -469,6 +609,8 @@ def run_tests(args: argparse.Namespace) -> None:
     sd_exe_paths = parse_sd_path_mode(args)
     results_dict = collections.defaultdict(list)
     services_remove_cmd = assemble_service_gen_cmd(args.gen_types, remove=True)
+    run_perf = args.gen_flamegraph and is_installed("perf")
+    profiler = PerfController()
     services_num_list = list(
         range(
             args.start_services_num,
@@ -487,6 +629,8 @@ def run_tests(args: argparse.Namespace) -> None:
         )
         run_cmd(services_gen_cmd, ROOT_UID, ROOT_GID)
         for sd_exe_path in sd_exe_paths:
+            if run_perf:
+                profiler.run_perf_record(args.perf_frequency, args.perf_sleep_period)
             sd_test_cmd = [
                 TIME_CMD_PATH,
                 "-p",
@@ -504,6 +648,13 @@ def run_tests(args: argparse.Namespace) -> None:
                 stdout_file=subprocess.DEVNULL,
                 stderr_file=subprocess.PIPE,
             )
+
+            if run_perf:
+                profiler.stop_perf_record()
+                PerfController.gen_flamegraph(
+                    args.output_files_dir, args.output_files_name, services_num
+                )
+
             units_load_time_in_sec = parse_sd_test_cmd_result(result)
             print(f"units load time in seconds = {units_load_time_in_sec} s")
             results_dict[sd_exe_path].append(units_load_time_in_sec)
@@ -637,6 +788,29 @@ def parse_args() -> argparse.Namespace:
         "--gen_graphviz_dot",
         action="store_true",
         help="generate graphviz dot file",
+    )
+
+    parser.add_argument(
+        "-l",
+        "--gen_flamegraph",
+        action="store_true",
+        help="generate per test flamegraph",
+    )
+
+    parser.add_argument(
+        "-F",
+        "--perf_frequency",
+        type=str,
+        default=DEFAULT_PERF_FREQUENCY,
+        help="perf profiling frequency",
+    )
+
+    parser.add_argument(
+        "-S",
+        "--perf_sleep_period",
+        type=int,
+        default=DEFAULT_PERF_SLEEP_PERIOD,
+        help="perf command sleep time before stop recording",
     )
 
     return parser.parse_args()
