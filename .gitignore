@@ -3,4 +3,5 @@ sd_build_load_test/
 *.jpg
 *.dot
 *.service
+*.html
 __pycache__
