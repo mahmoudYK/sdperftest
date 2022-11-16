@@ -483,7 +483,7 @@ class Reporter:
 
 
 class PerfController:
-    """linux perf tool prfiling data recorder and flamegraph generator"""
+    """invoke linux perf tool for recording profiling data and generating flamegraphs"""
 
     def __init__(self) -> None:
         self.ctl_dir = "/tmp/"
@@ -493,21 +493,22 @@ class PerfController:
         self.ctl_ack_fifo_file = None
         self.perf_proc = None
 
-    def check_fifo_exists(self, path: str) -> bool:
+    def __check_fifo_exists(self, path: str) -> bool:
         """check if a named pipe exists"""
         try:
             return stat.S_ISFIFO(os.stat(path).st_mode)
         except FileNotFoundError:
             return False
 
+    def __unlink_existing_fifo(self, fifo_path:str) -> None:
+        if self.__check_fifo_exists(fifo_path):
+            print(f"{fifo_path} exists, unlink...")
+            os.unlink(fifo_path)
+
     def __create_fifos(self) -> None:
         """create perf ctl and ack nemd pipes"""
-        if self.check_fifo_exists(self.ctl_fifo):
-            print(f"{self.ctl_fifo} exists, deleteing...")
-            os.unlink(self.ctl_fifo)
-        if self.check_fifo_exists(self.ctl_ack_fifo):
-            print(f"{self.ctl_ack_fifo} exists, deleteing...")
-            os.unlink(self.ctl_ack_fifo)
+        self.__unlink_existing_fifo(self.ctl_fifo)
+        self.__unlink_existing_fifo(self.ctl_ack_fifo)
         try:
             os.mkfifo(self.ctl_fifo, 0o660)
             os.mkfifo(self.ctl_ack_fifo, 0o660)
@@ -555,7 +556,7 @@ class PerfController:
         self.__read_ack()
 
     def stop_perf_record(self) -> None:
-        """stop perf process if it is still running, close and delete the named pipes"""
+        """stop perf process if still running, close and delete the named pipes"""
         if self.__check_perf_proc_alive():
             self.__write_to_ctl_fifo("stop\n")
             while self.__check_perf_proc_alive():
