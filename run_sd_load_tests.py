@@ -569,13 +569,14 @@ class PerfController:
 
     @classmethod
     def gen_flamegraph(
-        cls, output_files_dir: str, output_files_name: str, services_num: int
+        cls, output_files_dir: str, output_files_name: str, services_num: int, idx:int
     ):
         """generate a flamegraph using perf script flamegraph.py"""
         if (
             os.path.isfile(PERF_OUTPUT_DATA_FILE)
             and os.stat(PERF_OUTPUT_DATA_FILE).st_size > 0
         ):
+            ref_or_comp = "ref" if idx == 0 else "comp"
             perf_script_cmd = [
                 PERF_CMD_PATH,
                 "script",
@@ -583,7 +584,7 @@ class PerfController:
                 "flamegraph",
                 "-o",
                 os.path.join(
-                    output_files_dir, output_files_name + str(services_num) + ".html"
+                    output_files_dir, f"{output_files_name}_{ref_or_comp}{str(services_num)}.html"
                 ),
             ]
             run_cmd(perf_script_cmd, ROOT_UID, ROOT_GID)
@@ -630,7 +631,7 @@ def run_tests(args: argparse.Namespace) -> None:
             dot_dir=args.output_files_dir,
         )
         run_cmd(services_gen_cmd, ROOT_UID, ROOT_GID)
-        for sd_exe_path in sd_exe_paths:
+        for idx,sd_exe_path in enumerate(sd_exe_paths):
             if run_perf:
                 profiler.run_perf_record(args.perf_frequency, args.perf_sleep_period)
             sd_test_cmd = [
@@ -654,7 +655,7 @@ def run_tests(args: argparse.Namespace) -> None:
             if run_perf:
                 profiler.stop_perf_record()
                 PerfController.gen_flamegraph(
-                    args.output_files_dir, args.output_files_name, services_num
+                    args.output_files_dir, args.output_files_name, services_num, idx
                 )
 
             units_load_time_in_sec = parse_sd_test_cmd_result(result)
