@@ -78,7 +78,7 @@ def print_line(num_of_lines: int = 1, length: int = 100, char: str = "-") -> Non
 
 
 def is_installed(program_name: str) -> bool:
-    '''check if a program is installed'''
+    """check if a program is installed"""
     installed = shutil.which(program_name) is not None
     if not installed:
         print(f"{program_name} is not installed!")
@@ -486,12 +486,12 @@ class PerfController:
     """invoke linux perf tool for recording profiling data and generating flamegraphs"""
 
     def __init__(self) -> None:
-        self.ctl_dir = "/tmp/"
-        self.ctl_fifo = os.path.join(self.ctl_dir, "perf_ctl.fifo")
-        self.ctl_ack_fifo = os.path.join(self.ctl_dir, "perf_ctl_ack.fifo")
-        self.ctl_fifo_file = None
-        self.ctl_ack_fifo_file = None
-        self.perf_proc = None
+        self.__ctl_dir = "/tmp/"
+        self.__ctl_fifo = os.path.join(self.__ctl_dir, "perf_ctl.fifo")
+        self.__ctl_ack_fifo = os.path.join(self.__ctl_dir, "perf_ctl_ack.fifo")
+        self.__ctl_fifo_file = None
+        self.__ctl_ack_fifo_file = None
+        self.__perf_proc = None
 
     def __check_fifo_exists(self, path: str) -> bool:
         """check if a named pipe exists"""
@@ -500,34 +500,34 @@ class PerfController:
         except FileNotFoundError:
             return False
 
-    def __unlink_existing_fifo(self, fifo_path:str) -> None:
+    def __unlink_existing_fifo(self, fifo_path: str) -> None:
         if self.__check_fifo_exists(fifo_path):
             print(f"{fifo_path} exists, unlink...")
             os.unlink(fifo_path)
 
     def __create_fifos(self) -> None:
         """create perf ctl and ack nemd pipes"""
-        self.__unlink_existing_fifo(self.ctl_fifo)
-        self.__unlink_existing_fifo(self.ctl_ack_fifo)
+        self.__unlink_existing_fifo(self.__ctl_fifo)
+        self.__unlink_existing_fifo(self.__ctl_ack_fifo)
         try:
-            os.mkfifo(self.ctl_fifo, 0o660)
-            os.mkfifo(self.ctl_ack_fifo, 0o660)
+            os.mkfifo(self.__ctl_fifo, 0o660)
+            os.mkfifo(self.__ctl_ack_fifo, 0o660)
         except OSError as ex:
             fail(f"failed to open perf fifos: {ex}")
 
     def __write_to_ctl_fifo(self, text: str) -> None:
         """write data to the perf ctl named pipe"""
-        self.ctl_fifo_file.write(text)
-        self.ctl_fifo_file.flush()
+        self.__ctl_fifo_file.write(text)
+        self.__ctl_fifo_file.flush()
 
     def __read_ack(self) -> str:
         """wait till perf writes ack to the ack named pipe"""
-        while self.ctl_ack_fifo_file.readline().strip() != "ack":
+        while self.__ctl_ack_fifo_file.readline().strip() != "ack":
             time.sleep(0.01)
 
     def __check_perf_proc_alive(self) -> bool:
         """check if perf process still running"""
-        return self.perf_proc.poll() is None
+        return self.__perf_proc.poll() is None
 
     def run_perf_record(self, sampling_frequency: str, sleep_period: int) -> None:
         """run perf record cmd and generate perf.data"""
@@ -540,7 +540,7 @@ class PerfController:
             "-D",
             "-1",
             "--control",
-            f"fifo:{self.ctl_fifo},{self.ctl_ack_fifo}",
+            f"fifo:{self.__ctl_fifo},{self.__ctl_ack_fifo}",
             "-F",
             sampling_frequency,
             "-e",
@@ -549,9 +549,11 @@ class PerfController:
             "sleep",
             str(sleep_period),
         ]
-        self.perf_proc = run_cmd(perf_record_cmd, ROOT_UID, ROOT_GID, non_blocking=True)
-        self.ctl_fifo_file = open(self.ctl_fifo, "w")
-        self.ctl_ack_fifo_file = open(self.ctl_ack_fifo, "r")
+        self.__perf_proc = run_cmd(
+            perf_record_cmd, ROOT_UID, ROOT_GID, non_blocking=True
+        )
+        self.__ctl_fifo_file = open(self.__ctl_fifo, "w")
+        self.__ctl_ack_fifo_file = open(self.__ctl_ack_fifo, "r")
         self.__write_to_ctl_fifo("enable\n")
         self.__read_ack()
 
@@ -559,12 +561,11 @@ class PerfController:
         """stop perf process if still running, close and delete the named pipes"""
         if self.__check_perf_proc_alive():
             self.__write_to_ctl_fifo("stop\n")
-            while self.__check_perf_proc_alive():
-                time.sleep(0.01)
-        self.ctl_fifo_file.close()
-        self.ctl_ack_fifo_file.close()
-        os.unlink(self.ctl_fifo)
-        os.unlink(self.ctl_ack_fifo)
+            self.__perf_proc.wait()
+        self.__ctl_fifo_file.close()
+        self.__ctl_ack_fifo_file.close()
+        os.unlink(self.__ctl_fifo)
+        os.unlink(self.__ctl_ack_fifo)
 
     @classmethod
     def gen_flamegraph(
