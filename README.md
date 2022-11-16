@@ -105,6 +105,12 @@ matplotlib: https://matplotlib.org/stable/users/installing/index.html
                         output artifacts dir
 -  -z, --gen_graphviz_dot  
                         generate graphviz dot file
+-  -l, --gen_flamegraph  
+                        generate per test flamegraph
+-  -F PERF_FREQUENCY, --perf_frequency PERF_FREQUENCY  
+                        perf profiling frequency
+-  -S PERF_SLEEP_PERIOD, --perf_sleep_period PERF_SLEEP_PERIOD  
+                        perf command sleep time before stop recording
 
 
 ## Examples:
