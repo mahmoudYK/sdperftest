@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
 # License: LGPL-2.1-or-later
 
-import re
 import os
 import sys
 import argparse
 import itertools
 import random
-import pathlib
 import dataclasses
 import types
 import functools
 import abc
 import glob
+import subprocess
+import typing
 import graphviz
 
 # https://github.com/facebookincubator/pystemd
-import pystemd.systemd1
 import pystemd.dbuslib
 
 
@@ -25,6 +24,8 @@ DEFAULT_NUM_OF_SERVICES = 500
 DEFAULT_EDGE_PROBABILITY = 0.1
 RANDOM_SEED = 2
 DEFAULT_GRAPHVIZ_DOT_OUTPUT_DIR = os.getcwd()
+SYSTEMCTL_EXE_PATH = "/usr/bin/systemctl"
+RM_EXE_PATH = "/usr/bin/rm"
 
 random.seed(RANDOM_SEED)
 
@@ -71,41 +72,52 @@ def fail(fail_message: str) -> None:
     sys.exit(1)
 
 
-def enable_service(manager: pystemd.systemd1.Manager, service: str) -> None:
-    """enable systemd service"""
-    status, _ = manager.Manager.EnableUnitFiles([service], False, False)
-    if not status:
-        fail(f"enabling {service} failed")
-    print(f"Enabled Service {service}", end="\r")
+def run_shell_cmd(
+    cmd: str,
+    stdout: int | typing.TextIO = subprocess.DEVNULL,
+    stderr: int | typing.TextIO = subprocess.DEVNULL,
+) -> None:
+    """run cmd with shell=True"""
+    try:
+        subprocess.run(cmd, shell=True, stdout=stdout, stderr=stderr, check=True)
+    except subprocess.CalledProcessError as ex:
+        fail(f"running {cmd} failed:\n{ex}")
 
 
-def disable_service(manager: pystemd.systemd1.Manager, service: str) -> None:
-    """disable systemd service"""
-    manager.Manager.DisableUnitFiles([service], False)
-
-
-def disable_test_services(service_template_prefix: str) -> int:
-    """disable all the test services"""
-    systemd_system_path = pathlib.Path(SYSTEMD_SYSTEM_PATH)
-    disabled_services_counter = 0
-    with pystemd.systemd1.Manager() as manager:
-        for entry in systemd_system_path.iterdir():
-            if entry.is_file() and re.match(
-                service_template_prefix + r"[0-9]+\.service", entry.name
-            ):
-                disable_service(manager, entry.name)
-                print(f"Disbaled Service {entry.name}", end="\r")
-                disabled_services_counter += 1
-    return disabled_services_counter
-
-
-def remove_test_services(path: str, service_template_prefix: str) -> None:
-    """remove all test services which match a certain template prefix"""
+def control_test_services(service_template_prefix: str, verb: str) -> int:
+    """apply systemctl verb on all the test services"""
     service_suffix = "*.service"
-    files_to_remove = glob.glob(path + service_template_prefix + service_suffix)
+    num_services_to_disable = len(
+        glob.glob1(SYSTEMD_SYSTEM_PATH, f"{service_template_prefix}{service_suffix}")
+    )
+    if num_services_to_disable:
+        run_shell_cmd(
+            f"{SYSTEMCTL_EXE_PATH} {verb} --root=/ {SYSTEMD_SYSTEM_PATH}{service_template_prefix}{service_suffix}"
+        )
+    return num_services_to_disable
+
+
+def enable_test_services(service_template_prefix: str, generator_type: str) -> int:
+    """enable systemd test services"""
+    print(f"\nenable {generator_type} generated test_services...")
+    return control_test_services(service_template_prefix, "enable")
+
+
+def disable_test_services(service_template_prefix: str, generator_type: str) -> int:
+    """disable systemd test services"""
+    print(f"disable {generator_type} generated test_services...")
+    return control_test_services(service_template_prefix, "disable")
+
+
+def remove_test_services(
+    path: str, service_template_prefix: str, generator_type: str
+) -> None:
+    """remove all test services which match a certain template prefix"""
+    print(f"remove {generator_type} generated test_services...")
+    service_suffix = "*.service"
+    files_to_remove = glob.glob1(path, service_template_prefix + service_suffix)
     if files_to_remove:
-        for file_name in files_to_remove:
-            os.remove(file_name)
+        run_shell_cmd(f"{RM_EXE_PATH} {path}{service_template_prefix}{service_suffix}")
 
 
 def write_service_file(path: str, service_text: str) -> None:
@@ -221,7 +233,7 @@ def gen_dot_file(
     digraph_dir: str,
     node_label_template: str,
 ) -> None:
-    '''generate graphviz dot file'''
+    """generate graphviz dot file"""
     dot = graphviz.Digraph(
         name=digraph_name,
         comment=digraph_comment,
@@ -293,16 +305,14 @@ class ParallelServices(ServiceGeneratorInterface):
         service_template = self.create_parallel_services_template(
             DefaultTemplate().template
         )
-
-        with pystemd.systemd1.Manager() as manager:
-            for i in range(num_of_services):
-                write_service_file(
-                    path + test_file_name.format(i),
-                    self.gen_service_text(service_template, i),
-                )
-                enable_service(manager, test_file_name.format(i))
-                if self._gen_dot:
-                    self._node_list.append(i)
+        for i in range(num_of_services):
+            write_service_file(
+                path + test_file_name.format(i),
+                self.gen_service_text(service_template, i),
+            )
+            print(f"Generated {i+1} services", end="\r")
+            if self._gen_dot:
+                self._node_list.append(i)
 
         return num_of_services
 
@@ -349,20 +359,18 @@ class SinglePathServices(ServiceGeneratorInterface):
         first_service_template = self.create_single_path_services_template(
             DefaultTemplate().template, True
         )
-
-        with pystemd.systemd1.Manager() as manager:
-            for i in range(num_of_services):
-                write_service_file(
-                    path + test_file_name.format(i),
-                    self.gen_service_text(
-                        service_template if i > 0 else first_service_template, i, i - 1
-                    ),
-                )
-                enable_service(manager, test_file_name.format(i))
-                if self._gen_dot:
-                    self._node_list.append(i)
-                    if i > 0:
-                        self._edge_list.append((i - 1, i))
+        for i in range(num_of_services):
+            write_service_file(
+                path + test_file_name.format(i),
+                self.gen_service_text(
+                    service_template if i > 0 else first_service_template, i, i - 1
+                ),
+            )
+            print(f"Generated {i+1} services", end="\r")
+            if self._gen_dot:
+                self._node_list.append(i)
+                if i > 0:
+                    self._edge_list.append((i - 1, i))
 
         return num_of_services
 
@@ -422,57 +430,48 @@ class DAGServices(ServiceGeneratorInterface):
         last_service_num = num_of_services - 1
         edge_list = []
 
-        with pystemd.systemd1.Manager() as manager:
-            for edge in edges:
-                first_node = edge[0]
-                second_node = edge[1]
+        for edge in edges:
+            first_node = edge[0]
+            second_node = edge[1]
 
-                # each node represents a service and it should be written to 
-                # SYSTEMD_SYSTEM_PATH even if it has an outdegree of 0.
-                # if the node has an outdegree > 0, the service file wil be overwritten,
-                # if not, it will be generated as a parallel service.
-                if first_node - previous_service == 1:
-                    write_service_file(
-                        path + test_file_name.format(first_node),
-                        ParallelServices().gen_service_text(
-                            parallel_service_template, first_node
-                        ),
-                    )
-                    enable_service(manager, test_file_name.format(first_node))
-                    previous_service = first_node
-                    if self._gen_dot:
-                        self._node_list.append(first_node)
+            # each node represents a service and it should be written to
+            # SYSTEMD_SYSTEM_PATH even if it has an outdegree of 0.
+            # if the node has an outdegree > 0, the service file wil be overwritten,
+            # if not, it will be generated as a parallel service.
+            if first_node - previous_service == 1:
+                write_service_file(
+                    path + test_file_name.format(first_node),
+                    ParallelServices().gen_service_text(
+                        parallel_service_template, first_node
+                    ),
+                )
+                print(f"Generated {first_node+1} services", end="\r")
+                previous_service = first_node
+                if self._gen_dot:
+                    self._node_list.append(first_node)
 
-                # edge_list is full and a new node number is started, write
-                # the edge_list to the previous node number service dependency list,
-                # and clear the edge_list to be used for the current new node.
-                if current_service_with_edges != first_node and edge_list:
-                    write_service_file(
-                        path + test_file_name.format(current_service_with_edges),
-                        self.gen_service_text(
-                            service_template, test_file_name, edge_list
-                        ),
-                    )
-                    enable_service(
-                        manager, test_file_name.format(current_service_with_edges)
-                    )
-                    edge_list.clear()
+            # edge_list is full and a new node number is started, write
+            # the edge_list to the previous node number service dependency list,
+            # and clear the edge_list to be used for the current new node.
+            if current_service_with_edges != first_node and edge_list:
+                write_service_file(
+                    path + test_file_name.format(current_service_with_edges),
+                    self.gen_service_text(service_template, test_file_name, edge_list),
+                )
+                edge_list.clear()
 
-                # (first_node < second_node) to make sure that the graph is directed acyclic graph
-                if (
-                    random.random() < self._edge_probability
-                    and first_node < second_node
-                ):
-                    edge_list.append(edge)
-                    current_service_with_edges = first_node
-                    if self._gen_dot:
-                        self._edge_list.append((first_node, second_node))
+            # (first_node < second_node) to make sure that the graph is directed acyclic graph
+            if random.random() < self._edge_probability and first_node < second_node:
+                edge_list.append(edge)
+                current_service_with_edges = first_node
+                if self._gen_dot:
+                    self._edge_list.append((first_node, second_node))
 
-                # no need to process the rest of permutations if first node in the edge
-                # is the last node, because all node numbers < the last node number.
-                # the last node number has been generated as a parallel service already.
-                if first_node == last_service_num:
-                    break
+            # no need to process the rest of permutations if first node in the edge
+            # is the last node, because all node numbers < the last node number.
+            # the last node number has been generated as a parallel service already.
+            if first_node == last_service_num:
+                break
 
         return num_of_services
 
@@ -570,8 +569,12 @@ def main() -> None:
                     fail("can't set generate and remove together")
 
                 elif args.remove:
-                    services_count = disable_test_services(obj.test_service_prefix)
-                    remove_test_services(SYSTEMD_SYSTEM_PATH, obj.test_service_prefix)
+                    services_count = disable_test_services(
+                        obj.test_service_prefix, str(obj)
+                    )
+                    remove_test_services(
+                        SYSTEMD_SYSTEM_PATH, obj.test_service_prefix, str(obj)
+                    )
                     print(
                         f"disabled and removed {services_count} services of type {str(obj)}"
                     )
@@ -582,6 +585,7 @@ def main() -> None:
                     services_count = obj.gen_test_services(
                         SYSTEMD_SYSTEM_PATH, args_num_of_services
                     )
+                    enable_test_services(obj.test_service_prefix, str(obj))
                     print(
                         f"generated and enabled {services_count} test services of type {str(obj)}"
                     )
