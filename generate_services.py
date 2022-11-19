@@ -72,10 +72,14 @@ def fail(fail_message: str) -> None:
     sys.exit(1)
 
 
+_FILE = typing.Union[None, int, typing.IO[typing.Any]]
+
+# security considerations of shell=True:
+# https://docs.python.org/3/library/subprocess.html#security-considerations
 def run_shell_cmd(
     cmd: str,
-    stdout: int | typing.TextIO = subprocess.DEVNULL,
-    stderr: int | typing.TextIO = subprocess.DEVNULL,
+    stdout: _FILE = subprocess.DEVNULL,
+    stderr: _FILE = subprocess.DEVNULL,
 ) -> None:
     """run cmd with shell=True"""
     try:
