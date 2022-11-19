@@ -15,6 +15,7 @@ import dataclasses
 import stat
 import time
 import shutil
+import typing
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
@@ -115,15 +116,17 @@ def assemble_service_gen_cmd(
     return cmd
 
 
+_FILE = typing.Union[None, int, typing.IO[typing.Any]]
+
 def run_cmd(
-    cmd: list,
+    cmd: typing.Sequence[str],
     uid: int,
     gid: int,
-    stdout_file=None,
-    stderr_file=None,
+    stdout_file:_FILE=None,
+    stderr_file:_FILE=None,
     non_blocking: bool = False,
 ) -> subprocess.CompletedProcess | subprocess.Popen:
-    """using subprocess to run a command and return subprocess.CompletedProcess"""
+    """using subprocess to run a command and return CompletedProcess or Popen"""
     cmd_str = " ".join(cmd)
     print(f"running: {cmd_str}")
 
@@ -147,8 +150,9 @@ def run_cmd(
                 user=uid,
                 group=gid,
             )
-    except Exception as ex:
-        fail(f"running {cmd_str} failed:\n{ex}")
+    except (subprocess.CalledProcessError,FileNotFoundError,OSError) as ex:
+        fail(f"running {cmd_str} failed.\nexception type {type(ex)}: {ex}")
+     
 
 
 def parse_sd_path_mode(args: argparse.Namespace) -> list:
