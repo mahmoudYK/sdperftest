@@ -87,13 +87,13 @@ def is_installed(program_name: str) -> bool:
 
 
 def assemble_service_gen_cmd(
-    types: list,
+    types: list[str],
     remove: bool = False,
     services_num: int = None,
     dag_edge_probability: float = None,
     gen_dot: bool = False,
     dot_dir: str = DEFAULT_OUTPUT_ARTIFACTS_DIR,
-) -> list:
+) -> list[str]:
     """assemble the generate_services.py arguments"""
     cmd = [PYTHON_PATH, SERVICES_GENERATOR_SCRIPT]
     for gen_type in types:
@@ -155,7 +155,7 @@ def run_cmd(
      
 
 
-def parse_sd_path_mode(args: argparse.Namespace) -> list:
+def parse_sd_path_mode(args: argparse.Namespace) -> list[str]:
     """parse sd_path_mode option and return the sd exe paths accordingly"""
     match args.sd_path_mode:
         case "exe":
