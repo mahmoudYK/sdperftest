@@ -29,12 +29,13 @@ RM_EXE_PATH = "/usr/bin/rm"
 
 random.seed(RANDOM_SEED)
 
+_Service_Temp_Type = dict[str,dict[str,str]]
 
 @dataclasses.dataclass
 class DefaultTemplate:
     """default systemd service file template"""
 
-    template: dict = dataclasses.field(
+    template: _Service_Temp_Type = dataclasses.field(
         default_factory=lambda: {
             "Unit": {"Description": ""},
             "Service": {
@@ -47,7 +48,7 @@ class DefaultTemplate:
     )
 
 
-def add_service_section(sections_dict: dict, section_name: str) -> list:
+def add_service_section(sections_dict: _Service_Temp_Type, section_name: str) -> list[str]:
     """return a list of key=value strings for a certain section"""
     output_list = [f"[{section_name}]"]
     for key, value in sections_dict[section_name].items():
@@ -55,7 +56,7 @@ def add_service_section(sections_dict: dict, section_name: str) -> list:
     return output_list
 
 
-def build_service_template(sections: dict) -> str:
+def build_service_template(sections: _Service_Temp_Type) -> str:
     """build a service template string from sections dictionary"""
     service_text = []
     service_text.extend(add_service_section(sections, "Unit"))
@@ -158,7 +159,7 @@ def to_namespace(func):
 
 
 @to_namespace
-def get_systemd_properties() -> dict:
+def get_systemd_properties() -> dict[str,int]:
     """call GetAll systemd dbus method and get all the exposed properties"""
     properties = {}
     cargs = pystemd.dbuslib.apply_signature(
@@ -227,10 +228,12 @@ def analyze_time() -> None:
         - properties.UnitsLoadStartTimestampMonotonic,
     )
 
+_Edge_List_Type = list[tuple[int,int]]
+_Node_List_Type = list[int]
 
 def gen_dot_file(
-    node_list: list,
-    edge_list: list,
+    node_list: _Node_List_Type,
+    edge_list: _Edge_List_Type,
     digraph_name: str,
     digraph_comment: str,
     digraph_filename: str,
@@ -238,6 +241,7 @@ def gen_dot_file(
     node_label_template: str,
 ) -> None:
     """generate graphviz dot file"""
+    print(f"Generate graphviz dot file for {len(node_list)} {digraph_name} services...")
     dot = graphviz.Digraph(
         name=digraph_name,
         comment=digraph_comment,
@@ -248,12 +252,13 @@ def gen_dot_file(
     for edge in edge_list:
         dot.edge(str(edge[0]), str(edge[1]))
     dot.save(filename=digraph_filename, directory=digraph_dir)
+    print(f"Generated {digraph_filename} at {digraph_dir}.")
 
 
 class ServiceGeneratorInterface(abc.ABC):
     """abstract service generator class, defines a set of must implement methods"""
 
-    def __init__(self, test_file_prefix: str, node_list: list, edge_list: list) -> None:
+    def __init__(self, test_file_prefix: str, node_list: _Node_List_Type, edge_list: _Edge_List_Type) -> None:
         self.__test_file_prefix = test_file_prefix
         self.__node_list = node_list
         self.__edge_list = edge_list
@@ -265,12 +270,12 @@ class ServiceGeneratorInterface(abc.ABC):
         return self.__test_file_prefix
 
     @property
-    def nodes(self) -> list:
+    def nodes(self) -> _Node_List_Type:
         """return the list of all the nodes(service numbers)"""
         return self.__node_list
 
     @property
-    def edges(self) -> list:
+    def edges(self) -> _Edge_List_Type:
         """return the list of all the edges(dependencies bwn services)"""
         return self.__edge_list
 
@@ -293,7 +298,7 @@ class ParallelServices(ServiceGeneratorInterface):
         self.__edge_list = []
         super().__init__(self.__test_file_prefix, self.__node_list, self.__edge_list)
 
-    def create_parallel_services_template(self, properties: dict) -> str:
+    def create_parallel_services_template(self, properties: _Service_Temp_Type) -> str:
         """generate parallel service template string"""
         properties["Unit"]["Description"] = "parallel test service {0}"
         return build_service_template(properties)
@@ -336,7 +341,7 @@ class SinglePathServices(ServiceGeneratorInterface):
         super().__init__(self.__test_file_prefix, self.__node_list, self.__edge_list)
 
     def create_single_path_services_template(
-        self, properties: dict, first_service: bool
+        self, properties: _Service_Temp_Type, first_service: bool
     ) -> str:
         """generate single path service template string"""
         properties["Unit"]["Description"] = "single path test service {0}"
@@ -394,7 +399,7 @@ class DAGServices(ServiceGeneratorInterface):
         self.__edge_list = []
         super().__init__(self.__test_file_prefix, self.__node_list, self.__edge_list)
 
-    def create_dag_services_template(self, properties: dict, parallel: bool) -> str:
+    def create_dag_services_template(self, properties: _Service_Temp_Type, parallel: bool) -> str:
         """generate DAG service template string"""
         properties["Unit"]["Description"] = "DAG test service {0}"
         if not parallel:
@@ -402,7 +407,7 @@ class DAGServices(ServiceGeneratorInterface):
         return build_service_template(properties)
 
     def gen_service_text(
-        self, template: str, service_name: str, services_list: dict
+        self, template: str, service_name: str, services_list: list[tuple[int,int]]
     ) -> str:
         """generate DAG services text"""
         first_edge = services_list[0]
