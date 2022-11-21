@@ -254,25 +254,25 @@ class ServiceGeneratorInterface(abc.ABC):
     """abstract service generator class, defines a set of must implement methods"""
 
     def __init__(self, test_file_prefix: str, node_list: list, edge_list: list) -> None:
-        self._test_file_prefix = test_file_prefix
-        self._node_list = node_list
-        self._edge_list = edge_list
+        self.__test_file_prefix = test_file_prefix
+        self.__node_list = node_list
+        self.__edge_list = edge_list
         super().__init__()
 
     @property
     def test_service_prefix(self) -> str:
         """return unique test file name per generator class"""
-        return self._test_file_prefix
+        return self.__test_file_prefix
 
     @property
     def nodes(self) -> list:
         """return the list of all the nodes(service numbers)"""
-        return self._node_list
+        return self.__node_list
 
     @property
     def edges(self) -> list:
         """return the list of all the edges(dependencies bwn services)"""
-        return self._edge_list
+        return self.__edge_list
 
     @abc.abstractmethod
     def gen_test_services(self, path: str, num_of_services: int) -> int:
@@ -287,11 +287,11 @@ class ParallelServices(ServiceGeneratorInterface):
     """generator of services that doesn't have any dependencies between each other"""
 
     def __init__(self, gen_dot: bool = False) -> None:
-        self._gen_dot = gen_dot
-        self._test_file_prefix = "test_parallel"
-        self._node_list = []
-        self._edge_list = []
-        super().__init__(self._test_file_prefix, self._node_list, self._edge_list)
+        self.__gen_dot = gen_dot
+        self.__test_file_prefix = "test_parallel"
+        self.__node_list = []
+        self.__edge_list = []
+        super().__init__(self.__test_file_prefix, self.__node_list, self.__edge_list)
 
     def create_parallel_services_template(self, properties: dict) -> str:
         """generate parallel service template string"""
@@ -305,7 +305,7 @@ class ParallelServices(ServiceGeneratorInterface):
     def gen_test_services(self, path: str, num_of_services: int) -> int:
         """write the test service text to num_of_services service files"""
 
-        test_file_name = self._test_file_prefix + "{0}.service"
+        test_file_name = self.__test_file_prefix + "{0}.service"
         service_template = self.create_parallel_services_template(
             DefaultTemplate().template
         )
@@ -315,8 +315,8 @@ class ParallelServices(ServiceGeneratorInterface):
                 self.gen_service_text(service_template, i),
             )
             print(f"Generated {i+1} services", end="\r")
-            if self._gen_dot:
-                self._node_list.append(i)
+            if self.__gen_dot:
+                self.__node_list.append(i)
 
         return num_of_services
 
@@ -329,11 +329,11 @@ class SinglePathServices(ServiceGeneratorInterface):
     """generator of services with only 1 After dependency on the previous test service"""
 
     def __init__(self, gen_dot: bool = False) -> None:
-        self._gen_dot = gen_dot
-        self._test_file_prefix = "test_single_path"
-        self._node_list = []
-        self._edge_list = []
-        super().__init__(self._test_file_prefix, self._node_list, self._edge_list)
+        self.__gen_dot = gen_dot
+        self.__test_file_prefix = "test_single_path"
+        self.__node_list = []
+        self.__edge_list = []
+        super().__init__(self.__test_file_prefix, self.__node_list, self.__edge_list)
 
     def create_single_path_services_template(
         self, properties: dict, first_service: bool
@@ -356,7 +356,7 @@ class SinglePathServices(ServiceGeneratorInterface):
     def gen_test_services(self, path: str, num_of_services: int) -> int:
         """write the test service text to num_of_services service files"""
 
-        test_file_name = self._test_file_prefix + "{0}.service"
+        test_file_name = self.__test_file_prefix + "{0}.service"
         service_template = self.create_single_path_services_template(
             DefaultTemplate().template, False
         )
@@ -371,10 +371,10 @@ class SinglePathServices(ServiceGeneratorInterface):
                 ),
             )
             print(f"Generated {i+1} services", end="\r")
-            if self._gen_dot:
-                self._node_list.append(i)
+            if self.__gen_dot:
+                self.__node_list.append(i)
                 if i > 0:
-                    self._edge_list.append((i - 1, i))
+                    self.__edge_list.append((i - 1, i))
 
         return num_of_services
 
@@ -387,12 +387,12 @@ class DAGServices(ServiceGeneratorInterface):
     """generator of DAG services that may have many or no dependencies between each other"""
 
     def __init__(self, edge_probability_arg: float, gen_dot: bool = False) -> None:
-        self._edge_probability = edge_probability_arg
-        self._gen_dot = gen_dot
-        self._test_file_prefix = "test_DAG"
-        self._node_list = []
-        self._edge_list = []
-        super().__init__(self._test_file_prefix, self._node_list, self._edge_list)
+        self.__edge_probability = edge_probability_arg
+        self.__gen_dot = gen_dot
+        self.__test_file_prefix = "test_DAG"
+        self.__node_list = []
+        self.__edge_list = []
+        super().__init__(self.__test_file_prefix, self.__node_list, self.__edge_list)
 
     def create_dag_services_template(self, properties: dict, parallel: bool) -> str:
         """generate DAG service template string"""
@@ -420,7 +420,7 @@ class DAGServices(ServiceGeneratorInterface):
 
     def gen_test_services(self, path: str, num_of_services: int) -> int:
         """write the test service text to num_of_services service files"""
-        test_file_name = self._test_file_prefix + "{0}.service"
+        test_file_name = self.__test_file_prefix + "{0}.service"
         service_template = self.create_dag_services_template(
             DefaultTemplate().template, False
         )
@@ -451,8 +451,8 @@ class DAGServices(ServiceGeneratorInterface):
                 )
                 print(f"Generated {first_node+1} services", end="\r")
                 previous_service = first_node
-                if self._gen_dot:
-                    self._node_list.append(first_node)
+                if self.__gen_dot:
+                    self.__node_list.append(first_node)
 
             # edge_list is full and a new node number is started, write
             # the edge_list to the previous node number service dependency list,
@@ -465,11 +465,11 @@ class DAGServices(ServiceGeneratorInterface):
                 edge_list.clear()
 
             # (first_node < second_node) to make sure that the graph is directed acyclic graph
-            if random.random() < self._edge_probability and first_node < second_node:
+            if random.random() < self.__edge_probability and first_node < second_node:
                 edge_list.append(edge)
                 current_service_with_edges = first_node
-                if self._gen_dot:
-                    self._edge_list.append((first_node, second_node))
+                if self.__gen_dot:
+                    self.__edge_list.append((first_node, second_node))
 
             # no need to process the rest of permutations if first node in the edge
             # is the last node, because all node numbers < the last node number.
