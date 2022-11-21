@@ -43,7 +43,7 @@ SERVICES_GENERATOR_SCRIPT = "generate_services.py"
 SYSTEMD_SYSTEM_PATH = "/run/systemd/system/"
 DEFAULT_OUTPUT_ARTIFACTS_FILE_NAME = "sd_load_test"
 SD_BUILD_SCRIPT = "./build_sd.sh"
-SD_BUILD_DIR = "sd_build_load_test"
+SD_BUILD_DIR = "/var/tmp/sd_build_load_test"
 DEFAULT_OUTPUT_ARTIFACTS_DIR = os.getcwd()
 
 
