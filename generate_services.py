@@ -92,14 +92,14 @@ def run_shell_cmd(
 def control_test_services(service_template_prefix: str, verb: str) -> int:
     """apply systemctl verb on all the test services"""
     service_suffix = "*.service"
-    num_services_to_disable = len(
+    services_num = len(
         glob.glob1(SYSTEMD_SYSTEM_PATH, f"{service_template_prefix}{service_suffix}")
     )
-    if num_services_to_disable:
+    if services_num:
         run_shell_cmd(
             f"{SYSTEMCTL_EXE_PATH} {verb} --root=/ {SYSTEMD_SYSTEM_PATH}{service_template_prefix}{service_suffix}"
         )
-    return num_services_to_disable
+    return services_num
 
 
 def enable_test_services(service_template_prefix: str, generator_type: str) -> int:
