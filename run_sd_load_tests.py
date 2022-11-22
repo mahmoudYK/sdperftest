@@ -685,6 +685,7 @@ def run_test(args: argparse.Namespace) -> int:
         )
     )
     for services_num in services_num_list:
+        print_line(char="*")
         services_gen_cmd = assemble_service_gen_cmd(
             args.gen_types,
             remove=False,
@@ -695,6 +696,7 @@ def run_test(args: argparse.Namespace) -> int:
         )
         run_cmd(services_gen_cmd, ROOT_UID, ROOT_GID)
         for idx, sd_exe_path in enumerate(sd_exe_paths):
+            print_line(char=".")
             if run_perf:
                 profiler.run_perf_record(args.perf_frequency, args.perf_sleep_period)
             sd_test_cmd = [
