@@ -119,6 +119,7 @@ def assemble_service_gen_cmd(
 
 
 _FILE = typing.Union[None, int, typing.IO[typing.Any]]
+_RunCmdReturnType = typing.Union[subprocess.CompletedProcess, subprocess.Popen]
 
 
 def run_cmd(
@@ -128,7 +129,7 @@ def run_cmd(
     stdout_file: _FILE = None,
     stderr_file: _FILE = None,
     non_blocking: bool = False,
-) -> subprocess.CompletedProcess | subprocess.Popen:
+) -> _RunCmdReturnType:
     """using subprocess to run a command and return CompletedProcess or Popen"""
     cmd_str = " ".join(cmd)
     print(f"running: {cmd_str}")
@@ -143,16 +144,16 @@ def run_cmd(
                 user=uid,
                 group=gid,
             )
-        else:
-            return subprocess.run(
-                cmd,
-                check=True,
-                stdout=stdout_file,
-                stderr=stderr_file,
-                text=True,
-                user=uid,
-                group=gid,
-            )
+
+        return subprocess.run(
+            cmd,
+            check=True,
+            stdout=stdout_file,
+            stderr=stderr_file,
+            text=True,
+            user=uid,
+            group=gid,
+        )
     except (subprocess.CalledProcessError, FileNotFoundError, OSError) as ex:
         fail(f"running {cmd_str} failed.\nexception type {type(ex)}: {ex}")
 
