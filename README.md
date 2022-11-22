@@ -157,9 +157,11 @@ $ dot -Tsvg test_DAG_10_services.dot -o test_DAG_10_vis.svg
 
 ## Required packages (Fedora)
 python3  
+python3-pystemd  
+js-d3-flame-graph  
 git  
 meson  
-ninja-build  
+ninja-build   
 perf  
 graphviz  
 
@@ -167,5 +169,11 @@ to install systemd build dependencies:
 ```sh
 $ dnf builddep systemd
 ```
+
+to install python required packages:
+```sh
+$ pip install -r requirements.txt
+```
+
 ## License:
 LGPL-2.1-or-later
