@@ -45,6 +45,8 @@ DEFAULT_OUTPUT_ARTIFACTS_FILE_NAME = "sd_load_test"
 SD_BUILD_SCRIPT = "./build_sd.sh"
 SD_BUILD_DIR = "/var/tmp/sd_build_load_test"
 DEFAULT_OUTPUT_ARTIFACTS_DIR = os.getcwd()
+EXIT_OK = 0
+EXIT_ERROR = 1
 
 
 @dataclasses.dataclass
@@ -66,7 +68,7 @@ class ErrorStats:
 def fail(fail_message: str) -> None:
     """print error message and exit with status 1"""
     print(f"Error: {fail_message}", file=sys.stderr)
-    sys.exit(1)
+    sys.exit(EXIT_ERROR)
 
 
 def print_line(num_of_lines: int = 1, length: int = 100, char: str = "-") -> None:
@@ -118,12 +120,13 @@ def assemble_service_gen_cmd(
 
 _FILE = typing.Union[None, int, typing.IO[typing.Any]]
 
+
 def run_cmd(
     cmd: typing.Sequence[str],
     uid: int,
     gid: int,
-    stdout_file:_FILE=None,
-    stderr_file:_FILE=None,
+    stdout_file: _FILE = None,
+    stderr_file: _FILE = None,
     non_blocking: bool = False,
 ) -> subprocess.CompletedProcess | subprocess.Popen:
     """using subprocess to run a command and return CompletedProcess or Popen"""
@@ -150,9 +153,8 @@ def run_cmd(
                 user=uid,
                 group=gid,
             )
-    except (subprocess.CalledProcessError,FileNotFoundError,OSError) as ex:
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError) as ex:
         fail(f"running {cmd_str} failed.\nexception type {type(ex)}: {ex}")
-     
 
 
 def parse_sd_path_mode(args: argparse.Namespace) -> list[str]:
@@ -416,6 +418,7 @@ class Reporter:
     def print_error_stats(self) -> None:
         """print the error statistics calculated from res_dict value lists"""
         print("error statistics:\n")
+        print(f"rmse error = {self.rmse:.{4}f}")
         print_line(length=120)
         print(
             f"{'services number' : <20}\
@@ -478,12 +481,66 @@ class Reporter:
 
     def report_test_results(self) -> None:
         """generate load test reports"""
+        print_line(char="#")
         self.plot()
         print_line(char="#")
         self.write_json()
         print_line(char="#")
         self.print_error_stats()
         print_line(char="#")
+
+    def __print_test_assertions(
+        self,
+        error_measure: list[str],
+        assertion_list: list[bool],
+        threshold_list: list[float],
+    ) -> None:
+        """print results of assertions against threshold values"""
+        print_line(char="#")
+        print("Assertions:\n")
+        for idx, name in enumerate(error_measure):
+            status = "ok."
+            if not threshold_list[idx]:
+                status = "not checked."
+            elif not assertion_list[idx]:
+                status = "fail."
+            print(f"{name.ljust(25,'.')}{status}")
+        print_line(char="#")
+
+    def assert_test_results(self, args: argparse.Namespace) -> int:
+        """check if error stats are lower than threshold values supplied by the user and set exit status accordingly"""
+        exit_status = EXIT_OK
+        test_error_list = [
+            self.error_stats.max_percent,
+            self.error_stats.min_percent,
+            self.error_stats.mean_percent,
+            self.error_stats.stddev_percent,
+            self.rmse,
+        ]
+        threshold_error_list = [
+            args.max_percent_threshold,
+            args.min_percent_threshold,
+            args.mean_percent_threshold,
+            args.stddev_percent_threshold,
+            args.rmse_threshold,
+        ]
+        error_measure_list = [
+            "max_percent",
+            "min_percent",
+            "mean_percent",
+            "stddev_percent",
+            "rmse",
+        ]
+        assertion_list = list(
+            map(lambda x, y: not y or x < y, test_error_list, threshold_error_list)
+        )
+        if not all(assertion_list):
+            exit_status = EXIT_ERROR
+        self.__print_test_assertions(
+            error_measure_list, assertion_list, threshold_error_list
+        )
+        print("done!")
+        return exit_status
 
 
 class PerfController:
@@ -573,7 +630,7 @@ class PerfController:
 
     @classmethod
     def gen_flamegraph(
-        cls, output_files_dir: str, output_files_name: str, services_num: int, idx:int
+        cls, output_files_dir: str, output_files_name: str, services_num: int, idx: int
     ):
         """generate a flamegraph using perf script flamegraph.py"""
         if (
@@ -588,7 +645,8 @@ class PerfController:
                 "flamegraph",
                 "-o",
                 os.path.join(
-                    output_files_dir, f"{output_files_name}_{ref_or_comp}{str(services_num)}.html"
+                    output_files_dir,
+                    f"{output_files_name}_{ref_or_comp}{str(services_num)}.html",
                 ),
             ]
             run_cmd(perf_script_cmd, ROOT_UID, ROOT_GID)
@@ -607,7 +665,7 @@ def remove_exisiting_test_services() -> None:
     run_cmd(services_remove_cmd, ROOT_UID, ROOT_GID)
 
 
-def run_tests(args: argparse.Namespace) -> None:
+def run_test(args: argparse.Namespace) -> int:
     """generate services and run tests on the 2 systemd binaries"""
     print_line(char="#")
     print(
@@ -635,7 +693,7 @@ def run_tests(args: argparse.Namespace) -> None:
             dot_dir=args.output_files_dir,
         )
         run_cmd(services_gen_cmd, ROOT_UID, ROOT_GID)
-        for idx,sd_exe_path in enumerate(sd_exe_paths):
+        for idx, sd_exe_path in enumerate(sd_exe_paths):
             if run_perf:
                 profiler.run_perf_record(args.perf_frequency, args.perf_sleep_period)
             sd_test_cmd = [
@@ -666,9 +724,6 @@ def run_tests(args: argparse.Namespace) -> None:
             print(f"units load time in seconds = {units_load_time_in_sec} s")
             results_dict[sd_exe_path].append(units_load_time_in_sec)
     rmse = ErrorStatsCalculator.calc_rmse(results_dict)
-    print_line(char="#")
-    print(f"rmse error = {rmse:.{4}f}")
-    print_line(char="#")
     error_stats = ErrorStatsCalculator.calc_error_stats(results_dict)
     reporter = Reporter(
         results_dict,
@@ -682,8 +737,7 @@ def run_tests(args: argparse.Namespace) -> None:
     )
     reporter.report_test_results()
     run_cmd(services_remove_cmd, ROOT_UID, ROOT_GID)
-    print_line(char="#")
-    print("done!")
+    return reporter.assert_test_results(args)
 
 
 def parse_args() -> argparse.Namespace:
@@ -820,6 +874,41 @@ def parse_args() -> argparse.Namespace:
         help="perf command sleep time before stop recording",
     )
 
+    parser.add_argument(
+        "-M",
+        "--max_percent_threshold",
+        type=float,
+        help="max percentage error threshold for the script to exit successfully",
+    )
+
+    parser.add_argument(
+        "-N",
+        "--min_percent_threshold",
+        type=float,
+        help="min percentage error threshold for the script to exit successfully",
+    )
+
+    parser.add_argument(
+        "-E",
+        "--mean_percent_threshold",
+        type=float,
+        help="mean percentage error threshold for the script to exit successfully",
+    )
+
+    parser.add_argument(
+        "-D",
+        "--stddev_percent_threshold",
+        type=float,
+        help="stddev percentage error threshold for the script to exit successfully",
+    )
+
+    parser.add_argument(
+        "-R",
+        "--rmse_threshold",
+        type=float,
+        help="RMSE threshold for the script to exit successfully",
+    )
+
     return parser.parse_args()
 
 
@@ -859,7 +948,7 @@ def main() -> None:
 
     remove_exisiting_test_services()
 
-    run_tests(args)
+    sys.exit(run_test(args))
 
 
 if __name__ == "__main__":
