@@ -77,7 +77,7 @@ matplotlib: https://matplotlib.org/stable/users/installing/index.html
 -h, --help  
                         show this help message and exit
 -  -m SD_PATH_MODE, --sd_path_mode SD_PATH_MODE  
-                        use 2 systemd executable paths or 2 systemd upstream commit hashes [exe,commit]
+                        select 2 systemd executable paths or 2 systemd upstream commit hashes [exe|commit]
 -  -e SD_REF_EXE_PATH, --sd_ref_exe_path SD_REF_EXE_PATH  
                         reference systemd executable path
 -  -f SD_COMP_EXE_PATH, --sd_comp_exe_path SD_COMP_EXE_PATH  
@@ -87,7 +87,7 @@ matplotlib: https://matplotlib.org/stable/users/installing/index.html
 -  -d SD_COMMIT_COMP, --sd_commit_comp SD_COMMIT_COMP  
                         commit hash of the compared systemd repo
 -  -t GEN_TYPES, --gen_types GEN_TYPES  
-                        type of generated test services [parallel,single_path,dag]
+                        type of generated test services [parallel|single_path|dag]
 -  -p DAG_EDGE_PROBABILITY, --dag_edge_probability DAG_EDGE_PROBABILITY  
                         edge probability for DAG services generator
 -  -s START_SERVICES_NUM, --start_services_num START_SERVICES_NUM  
@@ -112,19 +112,28 @@ matplotlib: https://matplotlib.org/stable/users/installing/index.html
                         perf profiling frequency
 -  -S PERF_SLEEP_PERIOD, --perf_sleep_period PERF_SLEEP_PERIOD  
                         perf command sleep time before stop recording
-
+-  -M MAX_PERCENT_THRESHOLD, --max_percent_threshold MAX_PERCENT_THRESHOLD  
+                        max percentage error threshold for the script to exit successfully
+-  -N MIN_PERCENT_THRESHOLD, --min_percent_threshold MIN_PERCENT_THRESHOLD  
+                        min percentage error threshold for the script to exit successfully
+-  -E MEAN_PERCENT_THRESHOLD, --mean_percent_threshold MEAN_PERCENT_THRESHOLD  
+                        mean percentage error threshold for the script to exit successfully
+-  -D STDDEV_PERCENT_THRESHOLD, --stddev_percent_threshold STDDEV_PERCENT_THRESHOLD  
+                        stddev percentage error threshold for the script to exit successfully
+-  -R RMSE_THRESHOLD, --rmse_threshold RMSE_THRESHOLD  
+                        RMSE threshold for the script to exit successfully
 
 ## Examples:
 Generate this sequence of 'dag' services numbers (with edge probability=0.2): [500 1000 1500 2000 2500].
 Use EUID and EGID of 1000 to run 'systemd --test --system --no-pager' command for each number of 
 generated services. The output files should be named results.json and results.jpg.
 ```sh
-$ sudo python3 run_tests.py -t dag -p .2 -s 500 -j 500 -n 5 -m exe -e $SD_BIN_PATH1/systemd -f $SD_BIN_PATH2/systemd -o results -r $OUTPUT_DIR -u 1000 -g 1000
+$ sudo python3 run_tests.py -t dag -p .5 -s 1000 -j 1000 -n 5 -m exe -e $SD_BIN_PATH1/systemd -f $SD_BIN_PATH2/systemd -o results -r $OUTPUT_DIR -u 1000 -g 1000 -z -l -S 50 -F 1000 -M 10 -E 5  
 ```
 Generate the same sequence of services as in the previous example, however use systemd git commit hashes instead of executable paths, 
 and generate graphviz dot files, save the dot files at $OUTPUT_DIR 
 ```sh
-$ sudo python3 run_tests.py -t dag -p .2 -s 500 -j 500 -n 5 -m commit -c $SD_COMMIT_HASH1 -d $SD_COMMIT_HASH2 -o results -r $OUTPUT_DIR -u 1000 -g 1000 -z
+$ sudo python3 run_tests.py -t dag -p .01 -s 1000 -j 1000 -n 30 -m commit -c $SD_COMMIT_HASH1 -d $SD_COMMIT_HASH2 -o results -r $OUTPUT_DIR -u 1000 -g 1000 -z -l -S 100 -F 1000 -M 15 -E 5 -R 0.1
 ```
 
 ## build_sd.sh
@@ -143,5 +152,23 @@ Clone & build systemd using a specific git commit hash from systemd github repo:
 $ ./build_sd.sh -d $SD_BUILD_DIR -c $SD_COMMIT_HASH
 ```
 
+## Visualize graphviz dot files
+Using graphviz dot tool:  
+ ```sh
+$ dot -Tsvg test_DAG_10_services.dot -o test_DAG_10_vis.svg
+```
+
+## Required packages (Fedora)
+python3  
+git  
+meson  
+ninja-build  
+perf  
+graphviz  
+
+to install systemd build dependencies:
+```sh
+$ dnf builddep systemd
+```
 ## License:
 LGPL-2.1-or-later
