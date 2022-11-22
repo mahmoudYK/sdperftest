@@ -164,6 +164,7 @@ def parse_sd_path_mode(args: argparse.Namespace) -> list[str]:
         case "exe":
             return [args.sd_ref_exe_path, args.sd_comp_exe_path]
         case "commit":
+            print_line(char="*")
             commit_hash_list = [args.sd_commit_ref, args.sd_commit_comp]
             sd_exe_path_list = []
             os.chmod(SD_BUILD_SCRIPT, 0o755)
