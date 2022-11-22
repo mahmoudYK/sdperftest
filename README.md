@@ -124,16 +124,13 @@ matplotlib: https://matplotlib.org/stable/users/installing/index.html
                         RMSE threshold for the script to exit successfully
 
 ## Examples:
-Generate this sequence of 'dag' services numbers (with edge probability=0.2): [500 1000 1500 2000 2500].
-Use EUID and EGID of 1000 to run 'systemd --test --system --no-pager' command for each number of 
-generated services. The output files should be named results.json and results.jpg.
+Use 2 systemd exe paths:
 ```sh
-$ sudo python3 run_tests.py -t dag -p .5 -s 1000 -j 1000 -n 5 -m exe -e $SD_BIN_PATH1/systemd -f $SD_BIN_PATH2/systemd -o results -r $OUTPUT_DIR -u 1000 -g 1000 -z -l -S 50 -F 1000 -M 10 -E 5  
+$ sudo python3 run_sd_load_tests.py -t dag -p .5 -s 1000 -j 1000 -n 5 -m exe -e $SD_BIN_PATH1/systemd -f $SD_BIN_PATH2/systemd -o results -r $OUTPUT_DIR -u 1000 -g 1000 -z -l -S 50 -F 1000 -M 10 -E 5  
 ```
-Generate the same sequence of services as in the previous example, however use systemd git commit hashes instead of executable paths, 
-and generate graphviz dot files, save the dot files at $OUTPUT_DIR 
+Use 2 systemd git (https://github.com/systemd/systemd) commits: 
 ```sh
-$ sudo python3 run_tests.py -t dag -p .01 -s 1000 -j 1000 -n 30 -m commit -c $SD_COMMIT_HASH1 -d $SD_COMMIT_HASH2 -o results -r $OUTPUT_DIR -u 1000 -g 1000 -z -l -S 100 -F 1000 -M 15 -E 5 -R 0.1
+$ sudo python3 run_sd_load_tests.py -t dag -p .01 -s 1000 -j 1000 -n 30 -m commit -c $SD_COMMIT_HASH1 -d $SD_COMMIT_HASH2 -o results -r $OUTPUT_DIR -u 1000 -g 1000 -z -l -S 100 -F 1000 -M 15 -E 5 -R 0.1
 ```
 
 ## build_sd.sh
