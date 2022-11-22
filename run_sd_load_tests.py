@@ -304,7 +304,7 @@ class Reporter:
     dag_edge_probability: float
     error_stats: ErrorStats
 
-    def plot(self) -> None:
+    def __plot(self) -> None:
         """plot units load time against the number of test services"""
         print("plotting ...")
         fig = plt.figure(figsize=(FIG_WIDTH, FIG_HEIGHT))
@@ -373,7 +373,7 @@ class Reporter:
         plt.savefig(fig_path, dpi=250)
         print(f"saved figure at {fig_path}")
 
-    def write_json(self) -> None:
+    def __write_json(self) -> None:
         """write test results to json file"""
         print("writing json file ...")
         json_str_dict = {}
@@ -416,7 +416,7 @@ class Reporter:
             json.dump(json_str_dict, json_file, indent=2)
         print(f"saved json data at {json_file_path}")
 
-    def print_error_stats(self) -> None:
+    def __print_error_stats(self) -> None:
         """print the error statistics calculated from res_dict value lists"""
         print("error statistics:\n")
         print(f"rmse error = {self.rmse:.{4}f}")
@@ -483,11 +483,11 @@ class Reporter:
     def report_test_results(self) -> None:
         """generate load test reports"""
         print_line(char="#")
-        self.plot()
+        self.__plot()
         print_line(char="#")
-        self.write_json()
+        self.__write_json()
         print_line(char="#")
-        self.print_error_stats()
+        self.__print_error_stats()
         print_line(char="#")
 
     def __print_test_assertions(
