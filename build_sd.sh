@@ -26,7 +26,7 @@ EOF
 # $1: failure msg 
 fail() {
     echo "exit 1, $1"
-    cd "$INITIAL_WD" || exit $EXIT_ERROR
+    cd "$INITIAL_WD"
     exit $EXIT_ERROR
 }
 
