@@ -74,7 +74,7 @@ be generated for each test case also.
 matplotlib: https://matplotlib.org/stable/users/installing/index.html
 
 ## Options:
--h, --help  
+-  -h, --help  
                         show this help message and exit
 -  -m SD_PATH_MODE, --sd_path_mode SD_PATH_MODE  
                         select 2 systemd executable paths or 2 systemd upstream commit hashes [exe|commit]
