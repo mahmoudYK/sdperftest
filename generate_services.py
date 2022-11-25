@@ -12,6 +12,7 @@ import functools
 import abc
 import glob
 import subprocess
+import decimal
 import typing
 import graphviz
 
@@ -136,17 +137,18 @@ def write_service_file(path: str, service_text: str) -> None:
 
 def print_time_from_microseconds(time_var: str, val: int) -> None:
     """write property = val (m|s|ms|us) to console"""
-    time_in_seconds = val / 1000000
+    decimal.getcontext().rounding = decimal.ROUND_DOWN
+    time_in_seconds =decimal.Decimal(val / 1000000)
     if time_in_seconds >= 60:
         time_in_minutes = int(time_in_seconds // 60)
         time_in_seconds -= time_in_minutes * 60
-        print(f"{time_var} = {time_in_minutes}m {time_in_seconds:.{3}f}s")
+        print(f"{time_var} = {time_in_minutes}min {float(round(time_in_seconds, 3))}s")
     elif 60 > time_in_seconds >= 1:
-        print(f"{time_var} = {time_in_seconds:.{3}f}s")
+        print(f"{time_var} = {float(round(time_in_seconds, 3))}s")
     elif 1 > time_in_seconds >= 0.001:
-        print(f"{time_var} = {time_in_seconds * 1000:.{3}f}ms")
+        print(f"{time_var} = {float(round(time_in_seconds * 1000, 3))}ms")
     else:
-        print(f"{time_var} = {time_in_seconds * 1000000:.{3}f}us")
+        print(f"{time_var} = {float(round(time_in_seconds * 1000000, 3))}us")
 
 
 def to_namespace(func):
