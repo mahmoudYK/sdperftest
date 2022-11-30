@@ -752,7 +752,7 @@ def parse_args() -> argparse.Namespace:
         "-m",
         "--sd_path_mode",
         type=str,
-        help="use 2 systemd executable paths or 2 systemd upstream commit hashes [exe,commit]",
+        help="select 2 systemd executable paths or 2 systemd upstream commit hashes [exe|commit]",
     )
 
     parser.add_argument(
