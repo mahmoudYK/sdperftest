@@ -37,7 +37,7 @@ also generate graphviz dot source file and save it to dot_dir directory:
 ```sh
 $ sudo python3 generate_services.py  -t dag -p 0.01 -n 1000 -g -z -d dot_dir
 ```
-(-g an be omitted)
+(-g can be omitted)
 
 Disable and remove all services of type DAG:
 ```sh
